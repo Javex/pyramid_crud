@@ -26,5 +26,5 @@ change unless the libraries dependencies are decoupled as described in
 Links
 -----
 
-`Documentation <http://pyramid-crud.readthedocs.org>`_
-`Source Code <https://github.com/Javex/pyramid_crud>`_
+* `Documentation <http://pyramid-crud.readthedocs.org>`_
+* `Source Code <https://github.com/Javex/pyramid_crud>`_
