@@ -14,17 +14,12 @@ docs_extras = [
     'sphinx_rtd_theme',
 ]
 
-
-tests_require = [
-    'pytest',
-]
-
 requires = [
     'pyramid',  # framework
     'Mako',  # templating
     'pyramid_mako',  # templating
     'SQLAlchemy>=0.8',  # database
-    'WTForms',  # forms
+    'wtforms',  # forms
     'wtforms_alchemy',  # forms
 ]
 
@@ -68,6 +63,5 @@ setup(name='pyramid_crud',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
-      tests_require=tests_require,
       cmdclass={'test': PyTest},
       )

@@ -2,5 +2,5 @@ pyramid
 Mako
 pyramid_mako
 SQLAlchemy>=0.8
-WTForms
+wtforms
 wtforms_alchemy
