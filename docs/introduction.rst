@@ -21,6 +21,8 @@ Or you can fetch the current sources and install it manually:
     cd pyramid_crud
     python setup.py install
 
+.. _dependencies:
+
 A Word on Dependencies
 ----------------------
 
