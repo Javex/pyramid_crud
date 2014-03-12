@@ -50,8 +50,11 @@ class CRUDView(object):
 
     def __init__(self, request):
         self.request = request
-        self.delete_form = self.delete_form_factory(
-            self.request.POST, csrf_context=self.request)
+
+    @property
+    def delete_form(self):
+        return self.delete_form_factory(self.request.POST,
+                                        csrf_context=self.request)
 
     @property
     def dbsession(self):
@@ -148,6 +151,7 @@ class CRUDView(object):
             form = self.form(self.request.POST, obj, csrf_context=self.request)
         else:
             form = self.form(self.request.POST, csrf_context=self.request)
+        form.session = self.request.dbsession
 
         # Prepare return values
         retparams = {'form': form, 'is_new': is_new}

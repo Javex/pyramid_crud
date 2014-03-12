@@ -4,6 +4,7 @@ from wtforms.fields import SubmitField
 from wtforms.form import Form
 from .util import classproperty, get_pks
 from sqlalchemy.orm.session import object_session
+from sqlalchemy.inspection import inspect
 from webob.multidict import MultiDict
 from collections import OrderedDict
 import logging
@@ -28,14 +29,36 @@ class BaseModelForm(Form):
     def fieldsets(self):
         return [(None, {'fields': [field.name for field in self]})]
 
-    def _relationship_key(self, other_model):
+    def _relationship_key(self, other_form):
         """
         Get the name of the attribute that is the relationship between this
-        forms model and some other model.
+        forms model and the model defined on another form.
+
+        By default the ``relationship_name`` attribute of ``other_form`` is
+        looked up and used, if it is present. Otherwise, the relationship is
+        determined dynamically.
+
+        :param other_form: The other form to which the relationship should be
+            found.
         """
-        for relationship in self.Meta.model.__mapper__.relationships:
+        # If explicitly defined, return it
+        if other_form.relationship_name:
+            return other_form.relationship_name
+
+        other_model = other_form.Meta.model
+        candidates = []
+        for relationship in inspect(self.Meta.model).relationships:
             if relationship.mapper.class_ == other_model:
-                return relationship.key
+                candidates.append(relationship.key)
+        if len(candidates) == 0:
+            raise ValueError("Could not find relationship between the models "
+                             "%s and %s" % (self.Meta.model, other_model))
+        elif len(candidates) > 1:
+            raise ValueError("relationship between the models %s and %s is "
+                             "ambigous. Please specify the "
+                             "'relationship_name' attribute on %s"
+                             % (self.Meta.model, other_model, other_form))
+        return candidates[0]
 
     def process(self, formdata=None, obj=None, **kwargs):
         Form.process(self, formdata, obj, **kwargs)
@@ -76,7 +99,7 @@ class BaseModelForm(Form):
                             inline_formdata[index][field] = data
 
             # Find the matching relationship
-            key = self._relationship_key(inline.Meta.model)
+            key = self._relationship_key(inline)
             if key is None:
                 raise ValueError("Could not find relationship for %s" % inline)
 
@@ -154,7 +177,7 @@ class BaseModelForm(Form):
                     inline_obj = session.query(inline.Meta.model).get(pks)
                 else:
                     inline_obj = inline_model()
-                    relationship_key = self._relationship_key(inline_model)
+                    relationship_key = self._relationship_key(inline)
                     getattr(obj, relationship_key).append(inline_obj)
 
                 # Since the form was created like a standard form and the
@@ -175,6 +198,7 @@ class BaseModelForm(Form):
 
 class BaseInLine(object):
     extra = 0
+    relationship_name = None
 
     @classproperty
     def title(self):
@@ -182,7 +206,7 @@ class BaseInLine(object):
         The title. By default this returns the class name of the model. It is
         used in different places such as the title of the page.
         """
-        return self.Meta.model.__mapper__.class_.__name__
+        return inspect(self.Meta.model).class_.__name__
 
     @classproperty
     def title_plural(self):
@@ -197,7 +221,7 @@ class BaseInLine(object):
         The name of this inline. By default it uses the lowercase model class
         name.
         """
-        return self.Meta.model.__mapper__.class_.__name__.lower()
+        return inspect(self.Meta.model).class_.__name__.lower()
 
     @classproperty
     def form(self):
@@ -212,7 +236,12 @@ class BaseInLine(object):
     @classproperty
     def field_names(self):
         """
-        Get a list of all field names defined for this form.
+        A :class:`.classproperty` that returns a list of field names for the
+        associated form.
+
+        :return: A list of all names defined in the field in the same order as
+            they are defined on the form.
+        :rtype: list of str
         """
         return [field.name for field in self.form()]
 
@@ -221,7 +250,20 @@ class BaseInLine(object):
         """
         Get a list of primary key values in the order of the primary keys on
         the model. The returned value is suitable to be passed to
-        :meth:`sqlalchemy.Query.get`.
+        :meth:`sqlalchemy.orm.query.Query.get`.
+
+        :param formdata: A :class:`webob.multidict.MultiDict` that contains all
+            parameters that were passed to the form.
+
+        :param index: The index of the element for which the primary key is
+            desired. From this, the correct field name to get from ``fromdata``
+            is determined.
+        :type index: int
+
+        :return: A tuple of primary keys that uniquely identify the object in
+            the database. The order is based on the order of primary keys in
+            the table as reported by SQLAlchemy.
+        :rtype: tuple
         """
         pks = []
         for pk in get_pks(cls.Meta.model):
@@ -231,24 +273,44 @@ class BaseInLine(object):
                 return
             pk_val = int(pk_val)
             pks.append(pk_val)
-        return pks
+        return tuple(pks)
 
 
 class TabularInLine(BaseInLine):
+    """
+    A base class for a tabular inline display. Each row is displayed in a
+    table row with the field labels being displayed in the table head. This is
+    basically a list view of the fields only that you can edit and delete them
+    and even insert new ones.
+    """
     template = 'default/edit_inline/tabular.mako'
+    """The default template for tabular display"""
 
 
 class CSRFForm(SecureForm):
     """
-    .. todo::
-        Document.
+    Base class from which new CSRF-protected forms are derived. Only use this
+    if you want to create a form without the extra model-functionality, i.e.
+    is normal form.
+
+    If you want to create a CSRF-protected model form use
+    :class:`CSRFModelForm`.
     """
 
     def generate_csrf_token(self, csrf_context):
+        """
+        Create a CSRF token from the given context (which is actually just a
+        :class:`pyramid.request.Request` instance). This is automatically
+        called during ``__init__``.
+        """
         self.request = csrf_context
         return self.request.session.get_csrf_token()
 
     def validate(self):
+        """
+        Validate the form and with it the CSRF token. Logs a warning with the
+        error message and the remote IP address in case of an invalid token.
+        """
         result = SecureForm.validate(self)
         if not result and self.csrf_token.errors:
             log.warn("Invalid CSRF token with error(s) '%s' from IP address "
@@ -259,12 +321,17 @@ class CSRFForm(SecureForm):
 
 
 ModelForm = model_form_factory(BaseModelForm)
+"""The base class for all non-critical forms and subforms."""
 
 
 class CSRFModelForm(ModelForm, CSRFForm):
     """
-    A form that adds a CSRF token to the form. Use only this for security
-    critical forms.
+    A form that adds a CSRF token to the form. Derive from this class for
+    security critical operations (read: you want it most of the time and it
+    doesn't hurt.
+
+    Do not derive from this for inline stuff and other composite forms: Only
+    the main form should use this as you only need one token per request.
     """
     def __init__(self, formdata=None, obj=None, csrf_context=None, *args,
                  **kwargs):
@@ -273,6 +340,27 @@ class CSRFModelForm(ModelForm, CSRFForm):
 
 
 class ButtonForm(CSRFForm):
+    """
+    A simple form that only includes a ``button`` and a ``csrf_token`` field.
+    This can be used for operations on a form that should be single-click (like
+    deletion or toggling a boolean value). Note that the reason for not using
+    a URL for this is CSRF protection for these operations.
+
+    The form is created in the usual way but accepts a single new argument
+    ``title`` which is stored as the label's text on the form. Thus, you can
+    instantiate this form many times with different titles.
+
+    .. note::
+        This form alone does not identify an item, you have to do that with the
+        POST url you send the form to. If you were to include a button multiple
+        rows in a single form, you would not be able to identify the correct
+        object on the server side.
+
+    An example of its usage can be found in the ``delete_form`` of the default
+    :class:`.views.CRUDView` and the corresponding templates (e.g.
+    ``default/list.mako``).
+    """
+
     button = SubmitField()
 
     def __init__(self, formdata=None, obj=None, prefix='',

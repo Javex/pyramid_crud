@@ -1,40 +1,34 @@
+from sqlalchemy.inspection import inspect
+
+
 def get_pks(model):
     """
-    Get a list of primary key names for a given SQLAlchemy model.
+    Get a list of primary key attribute names, i.e. those attributes that
+    represent a primary key.
+
+    :param model: A model for which to search the keys.
     """
-    return [pk.name for pk in model.__table__.primary_key.columns]
+    pk_cols = set(pk.name for pk in inspect(model).primary_key)
+    pk_attributes = []
+    for prop in inspect(model).iterate_properties:
+        if len(prop.columns) != 1:
+            raise ValueError("Unexpected number of columns. Please report "
+                             "this as a bug.")
+        if prop.columns[0].name in pk_cols:
+            pk_attributes.append(prop.key)
+    return pk_attributes
 
 
-def classproperty(func):
+class classproperty(object):
     """
     A decorator to turn a method into a property on a class. Behaves the same
-    as a :cls:`property` only for classes instead of instances.
+    as a :cls:`property` only for classes instead of instances. Only supports
+    the get part.
     """
 
-    class ClassPropertyDescriptor(object):
+    def __init__(self, getter):
+        self.getter = getter
+        self.__doc__ = getter.__doc__
 
-        def __init__(self, fget, fset=None):
-            self.fget = fget
-            self.fset = fset
-
-        def __get__(self, obj, klass=None):
-            if klass is None:
-                klass = type(obj)
-            return self.fget.__get__(obj, klass)()
-
-        def __set__(self, obj, value):
-            if not self.fset:
-                raise AttributeError("can't set attribute")
-            type_ = type(obj)
-            return self.fset.__get__(obj, type_)(value)
-
-        def setter(self, func):
-            if not isinstance(func, (classmethod, staticmethod)):
-                func = classmethod(func)
-            self.fset = func
-            return self
-
-    if not isinstance(func, (classmethod, staticmethod)):
-        func = classmethod(func)
-
-    return ClassPropertyDescriptor(func)
+    def __get__(self, instance, owner):
+        return self.getter(owner)

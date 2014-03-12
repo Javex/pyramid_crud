@@ -11,6 +11,7 @@ except:
 docs_extras = [
     'Sphinx',
     'docutils',
+    'sphinx_rtd_theme',
 ]
 
 
@@ -22,7 +23,7 @@ requires = [
     'pyramid',  # framework
     'Mako',  # templating
     'pyramid_mako',  # templating
-    'SQLAlchemy',  # database
+    'SQLAlchemy>=0.8',  # database
     'WTForms',  # forms
     'wtforms_alchemy',  # forms
 ]
