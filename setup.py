@@ -8,12 +8,6 @@ try:
 except:
     README = CHANGES = ''
 
-docs_extras = [
-    'Sphinx',
-    'docutils',
-    'sphinx_rtd_theme',
-]
-
 requires = [
     'pyramid',  # framework
     'Mako',  # templating
