@@ -1,1 +1,1 @@
-recursive-include pyramid_curd *.mako
+recursive-include pyramid_crud *.mako
