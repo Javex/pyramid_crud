@@ -15,7 +15,9 @@ Read, Update, Delete) interface on persisted data.
 
 This library is an **unofficial** extension to Pyramid. This is not likely to
 change unless the libraries dependencies are decoupled as described in
-:ref:`dependencies`.
+`A Word on Dependencies`_.
+
+.. _A Word on Dependencies: https://pyramid-crud.readthedocs.org/en/latest/introduction.html#a-word-on-dependencies
 
 
 .. note:: 
