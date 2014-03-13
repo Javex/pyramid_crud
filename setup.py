@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 from setuptools import setup, find_packages, Command
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -8,6 +9,10 @@ try:
     CHANGES = open(os.path.join(here, 'CHANGES.txt')).read()
 except:
     README = CHANGES = ''
+
+v = open(os.path.join(os.path.dirname(__file__), 'pyramid_crud', '__init__.py'))
+VERSION = re.compile(r".*__version__ = '(.*?)'", re.S).match(v.read()).group(1)
+v.close()
 
 requires = [
     'pyramid',  # framework
@@ -37,7 +42,7 @@ class PyTest(Command):
         raise SystemExit(errno)
 
 setup(name='pyramid_crud',
-      version='0.1',
+      version=VERSION,
       description='CRUD interface for the Pyramid Framework',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[

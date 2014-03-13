@@ -1,5 +1,7 @@
 import os
 
+__version__ = '0.1.1'
+
 
 def includeme(config):
     here = os.path.abspath(os.path.dirname(__file__))
