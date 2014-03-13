@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from .compat import OrderedDict
 from pyramid.httpexceptions import HTTPFound
 import venusian
 from functools import partial

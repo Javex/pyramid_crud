@@ -6,7 +6,7 @@ from .util import classproperty, get_pks
 from sqlalchemy.orm.session import object_session
 from sqlalchemy.inspection import inspect
 from webob.multidict import MultiDict
-from collections import OrderedDict
+from .compat import OrderedDict
 import logging
 
 
