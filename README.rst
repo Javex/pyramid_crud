@@ -1,21 +1,7 @@
 pyramid_crud
 ============
 
-.. image:: https://travis-ci.org/Javex/pyramid_crud.png?branch=master
-   :target: https://travis-ci.org/Javex/pyramid_crud
-   :alt: Build Status
-
-.. image:: https://coveralls.io/repos/Javex/pyramid_crud/badge.png
-   :target: https://coveralls.io/r/Javex/pyramid_crud
-   :alt: Coverage
-
-.. image:: https://pypip.in/v/pyramid_crud/badge.png
-   :target: https://pypi.python.org/pypi/pyramid_crud/
-   :alt: Latest Version
-
-.. image:: https://pypip.in/license/pyramid_crud/badge.png
-    :target: https://pypi.python.org/pypi/pyramid_crud/
-    :alt: License
+|BuildStatus| |CoverageStatus| |LatestVersion| |License|
 
 This software is a framework with the attempt to replicate a behavior similar
 to Django's `Generic Views`_
@@ -46,3 +32,20 @@ Links
 
 * `Documentation <http://pyramid-crud.readthedocs.org>`_
 * `Source Code <https://github.com/Javex/pyramid_crud>`_
+* `Package on PyPI <https://pypi.python.org/pypi/pyramid_crud>`_
+
+.. |BuildStatus| image:: https://travis-ci.org/Javex/pyramid_crud.png?branch=master
+   :target: https://travis-ci.org/Javex/pyramid_crud
+   :alt: Build Status
+
+.. |CoverageStatus| image:: https://coveralls.io/repos/Javex/pyramid_crud/badge.png
+   :target: https://coveralls.io/r/Javex/pyramid_crud
+   :alt: Coverage
+
+.. |LatestVersion| image:: https://pypip.in/v/pyramid_crud/badge.png
+   :target: https://pypi.python.org/pypi/pyramid_crud/
+   :alt: Latest Version
+
+.. |License| image:: https://pypip.in/license/pyramid_crud/badge.png
+    :target: https://pypi.python.org/pypi/pyramid_crud/
+    :alt: License
