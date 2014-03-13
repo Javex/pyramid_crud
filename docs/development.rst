@@ -44,3 +44,6 @@ Then you can execute tests with:
 
 Now you can control the tests being executed and provide additional options
 using the usual py.test command line.
+
+Contributing
+------------
