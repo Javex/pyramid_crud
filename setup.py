@@ -1,4 +1,5 @@
 import os
+import sys
 from setuptools import setup, find_packages, Command
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -15,6 +16,8 @@ requires = [
     'SQLAlchemy>=0.8',  # database
     'wtforms',  # forms
     'wtforms_alchemy',  # forms
+    'ordereddict>=1.1'  # ordereddict for Python < 2.7
+    if sys.version_info[0] == 2 and sys.version_info[1] < 7 else '',
 ]
 
 

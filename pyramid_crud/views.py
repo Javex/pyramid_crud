@@ -1,9 +1,12 @@
-from .compat import OrderedDict
 from pyramid.httpexceptions import HTTPFound
 import venusian
 from functools import partial
 from .util import get_pks
 from .forms import ButtonForm
+try:
+    from collections import OrderedDict
+except:
+    from ordereddict import OrderedDict
 
 
 class CRUDCreator(type):
