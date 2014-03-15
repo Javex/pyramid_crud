@@ -19,7 +19,7 @@ requires = [
     'Mako',  # templating
     'pyramid_mako',  # templating
     'SQLAlchemy>=0.8',  # database
-    'wtforms',  # forms
+    'WTForms',  # forms
     'wtforms_alchemy',  # forms
     'ordereddict>=1.1'  # ordereddict for Python < 2.7
     if sys.version_info[0] == 2 and sys.version_info[1] < 7 else '',
