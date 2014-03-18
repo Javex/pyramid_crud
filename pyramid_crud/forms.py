@@ -204,7 +204,8 @@ class ModelForm(_CoreModelForm):
             if obj:
                 index = -1  # Needed in case there are no items yet
                 for index, item in enumerate(getattr(obj, key)):
-                    if 'delete_%s_%d' % (inline.name, index) in formdata:
+                    delete_key = 'delete_%s_%d' % (inline.name, index)
+                    if formdata and delete_key in formdata:
                         # Get the primary keys from the form and delete the
                         # item with the matching primary keys.
                         pks = inline.pks_from_formdata(formdata, index)
@@ -213,7 +214,7 @@ class ModelForm(_CoreModelForm):
                             target = session.query(inline.Meta.model).get(pks)
                             object_session(target).delete(target)
                     else:
-                        form = inline.form(inline_formdata.get(index), item)
+                        form = inline(inline_formdata.get(index), item)
                         inline_forms.append((form, False))
                 max_index = index + 1
             else:
@@ -224,18 +225,21 @@ class ModelForm(_CoreModelForm):
             # value from the form, otherwise we use the configured default.
             # In case of POST, we have to subtract the existing database items
             # from above as those fields were already added.
-            count = formdata.get('%s_count' % inline.name)
+            if formdata:
+                count = formdata.get('%s_count' % inline.name)
+            else:
+                count = None
             if count is None:
                 extra = inline.extra
             else:
                 extra = int(count) - max_index
-            if 'add_%s' % inline.name in formdata:
+            if formdata and 'add_%s' % inline.name in formdata:
                 extra += 1
 
             # Add empty form items
             for index in range(max_index, extra + max_index):
                 if 'delete_%s_%d' % (inline.name, index) not in formdata:
-                    form = inline.form(inline_formdata.get(index))
+                    form = inline(inline_formdata.get(index))
                     inline_forms.append((form, True))
 
             # For all forms, rename them and reassign their IDs as well. Only

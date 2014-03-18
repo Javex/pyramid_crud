@@ -126,9 +126,9 @@ def model_factory(request, Base, metadata, engine):
                 else:
                     properties[rel_name] = rel
 
-            class Model(object):
-                def __init__(self, **kw):
-                    self.__dict__.update(kw)
+            def __init__(self, **kw):
+                self.__dict__.update(kw)
+            Model = type(name, (object,), {'__init__': __init__})
             mapper(Model, table, properties=properties)
         metadata.create_all(engine)
         return Model
