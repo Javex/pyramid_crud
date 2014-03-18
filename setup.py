@@ -27,7 +27,7 @@ requires = [
 
 
 extras_require = {
-    'test': ['mock'],
+    'test': ['mock', 'pytest'],
 }
 
 
@@ -41,9 +41,8 @@ class PyTest(Command):
         pass
 
     def run(self):
-        import sys
         import subprocess
-        errno = subprocess.call([sys.executable, 'runtests.py'])
+        errno = subprocess.call(['py.test', 'tests'])
         raise SystemExit(errno)
 
 setup(name='pyramid_crud',
