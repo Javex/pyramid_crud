@@ -111,8 +111,9 @@ class TestNormalModelForm(object):
 
 
 @pytest.fixture(params=[0, 1, 2])
-def form_with_inlines(request, inline_form, form_factory, model_factory,
+def form_with_inlines(request, form_factory, model_factory,
                       normal_form):
+    inline_form = forms.BaseInLine
     "Prepare a form with inlines"
     # request.param denotes number of different inline forms
     def get_default_cols():
@@ -259,9 +260,8 @@ class TestNormalModelFormWithInline(object):
             assert len(forms) == 0
 
     def test_process_inline_with_obj(self, form_with_inlines,
-                                     formdata_with_inlines, obj_with_inlines):
-        self._parse_fixtures(form_with_inlines, formdata_with_inlines,
-                             obj_with_inlines)
+                                     obj_with_inlines):
+        self._parse_fixtures(form_with_inlines, None, obj_with_inlines)
         form = self.Form(obj=self.obj)
         if self.value_type == 'Parent only' or self.value_type == 'Both':
             assert form.test_text.data == 'ParentModel'
