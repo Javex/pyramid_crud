@@ -42,8 +42,7 @@ class CRUDCreator(type):
             info = venusian.attach(cls, cb)
 
 
-class CRUDView(object):
-    __metaclass__ = CRUDCreator
+class CRUDView(six.with_metaclass(CRUDCreator, object)):
     __abstract__ = True
     template_dir = 'default'
     template_ext = '.mako'

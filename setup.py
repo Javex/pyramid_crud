@@ -23,6 +23,7 @@ requires = [
     'wtforms_alchemy',  # forms
     'ordereddict>=1.1'  # ordereddict for Python < 2.7
     if sys.version_info[0] == 2 and sys.version_info[1] < 7 else '',
+    'six',
 ]
 
 

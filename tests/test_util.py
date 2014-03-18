@@ -1,4 +1,5 @@
 from pyramid_crud import util
+import six
 
 
 def test_classproperty():
@@ -28,4 +29,50 @@ class Test_get_pks(object):
     def test_different_colname(self, Model_diff_colname):
         assert sorted(util.get_pks(Model_diff_colname)) == ['id']
 
-# TODO: test meta_property
+
+def test_meta_property():
+    class Meta(type):
+        @util.meta_property
+        def test(self):
+            return "Meta"
+
+    class Test(six.with_metaclass(Meta, object)):
+        pass
+
+    class TestSub(Test):
+        test = "TestSub"
+
+    class TestSubSub(TestSub):
+        test = "TestSubSub"
+
+    class TestSubWithout(Test):
+        pass
+
+    class TestSubSubWithout(TestSubWithout):
+        pass
+
+    class TestSubSubInherit(TestSubSub):
+        pass
+
+    assert Test.test == "Meta"
+    assert TestSub.test == "TestSub"
+    assert TestSubSub.test == "TestSubSub"
+    assert TestSubWithout.test == "Meta"
+    assert TestSubSubWithout.test == "Meta"
+    assert TestSubSubInherit.test == "TestSubSub"
+
+
+def test_meta_property_new_meta():
+    class Meta(type):
+        @util.meta_property
+        def test(self):
+            return "Meta"
+
+    class Test(object):
+        test = "Test"
+
+    class TestWithMeta(six.with_metaclass(Meta, Test)):
+        pass
+
+    assert Test.test == "Test"
+    assert TestWithMeta.test == "Test"

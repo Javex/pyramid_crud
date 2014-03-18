@@ -1,4 +1,5 @@
 import wtforms_alchemy
+import six
 from wtforms.ext.csrf.form import SecureForm
 from wtforms.fields import SubmitField
 from .util import get_pks, meta_property
@@ -61,12 +62,12 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
         return [(None, {'fields': cls.field_names})]
 
 
-class _CoreModelForm(wtforms_alchemy.ModelForm):
+class _CoreModelForm(six.with_metaclass(_CoreModelMeta,
+                                        wtforms_alchemy.ModelForm)):
     """
     Base class for all complex form actions. This is used instead of the usual
     form class. Not to be used directly.
     """
-    __metaclass__ = _CoreModelMeta
 
     def __init__(self, formdata=None, obj=None, *args, **kw):
         self.obj = obj
@@ -283,11 +284,10 @@ class ModelForm(_CoreModelForm):
                 form.populate_obj(inline_obj)
 
 
-class BaseInLine(_CoreModelForm):
+class BaseInLine(six.with_metaclass(_CoreModelMeta, _CoreModelForm)):
     """
     Base-class for all inline forms.
     """
-    __metaclass__ = _CoreModelMeta
     extra = 0
     relationship_name = None
 
