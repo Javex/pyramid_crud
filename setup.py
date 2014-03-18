@@ -26,6 +26,11 @@ requires = [
 ]
 
 
+extras_require = {
+    'test': ['mock'],
+}
+
+
 class PyTest(Command):
     user_options = []
 
@@ -64,5 +69,6 @@ setup(name='pyramid_crud',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
+      extras_require=extras_require,
       cmdclass={'test': PyTest},
       )

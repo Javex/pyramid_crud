@@ -1,7 +1,14 @@
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
-from sqlalchemy import Column, Integer, Table, MetaData, ForeignKey
-from sqlalchemy.orm import mapper, relationship
+from sqlalchemy import (Column, Integer, Table, MetaData, ForeignKey,
+                        create_engine)
+from sqlalchemy.orm import mapper, relationship, Session
 import pytest
+import inspect
+from tests import all_forms, normal_forms, inline_forms
+try:
+    from collections import OrderedDict
+except:
+    from ordereddict import OrderedDict
 
 
 @pytest.fixture
@@ -18,121 +25,184 @@ def Base(metadata):
 
 
 @pytest.fixture
+def engine():
+    e = create_engine('sqlite://')
+    return e
+
+
+@pytest.fixture
+def DBSession(engine):
+    return Session(bind=engine)
+
+
+@pytest.fixture
 def metadata():
     return MetaData()
 
 
-@pytest.fixture(params=['declarative', 'classical'])
-def Model_one_pk(Base, request, metadata):
-    if request.param == 'declarative':
-        class Model(Base):
-            id = Column(Integer, primary_key=True)
-    else:
-        table = Table(
-            'model', metadata,
-            Column('id', Integer, primary_key=True))
-
-        class Model(object):
-            pass
-        mapper(Model, table)
-    return Model
+@pytest.fixture(params=normal_forms)
+def normal_form(request):
+    return request.param
 
 
-@pytest.fixture(params=['declarative', 'classical'])
-def Model_two_pk(Base, request, metadata):
-    if request.param == 'declarative':
-        class Model(Base):
-            id = Column(Integer, primary_key=True)
-            id2 = Column(Integer, primary_key=True)
-    else:
-        table = Table(
-            'model', metadata,
-            Column('id', Integer, primary_key=True),
-            Column('id2', Integer, primary_key=True))
+@pytest.fixture(params=inline_forms)
+def inline_form(request):
+    return request.param
 
-        class Model(object):
-            pass
-        mapper(Model, table)
-    return Model
+
+@pytest.fixture(params=all_forms)
+def any_form(request):
+    return request.param
 
 
 @pytest.fixture(params=['declarative', 'classical'])
-def Model_diff_colname(Base, request, metadata):
-    if request.param == 'declarative':
-        class Model(Base):
-            id = Column('id2', Integer, primary_key=True)
-    else:
-        table = Table(
-            'model', metadata,
-            Column('id2', Integer, primary_key=True))
+def model_factory(request, Base, metadata, engine):
+    """A fixture that returns a function to create models. The returned
+    function takes the following arguments:
 
-        class Model(object):
-            pass
-        mapper(Model, table, properties={'id': table.c.id2})
-    return Model
+    columns: A list of SQLAlchemy Column instances for the model, defaults
+    to an empty list, thus only the defaults will be used.
+
+    name: Name for the model to use. Defaults to "Model".
+
+    defaults: Another list of SA columns. This defaults to a single column
+    "id" thus allowing the defaults to create a table with no arguments
+    given.
+
+    col_name_to_attr_map: If you want to rename columns, then give this a
+    dict with column names as keys and attribute names as values. So, for
+    example, if you want to rename the column "id" to "id2" as the
+    attribute, then pass "{'id': 'id2'}".
+
+    relationships: A dict of relationships between the tables. As keys use
+    the desired attribute name and as value use the actual relationship.
+    In case of multiple relationships between two models, see the
+    relationship_fks option. In this case, this may also be callables that
+    accept a single argument, either a string or a column which will be
+    a valid argument for the "foreign_keys" option to "relationship".
+
+    relationship_fks: A map of relationship attribute names (keys) to
+    column names on the model. Thus if you want to pass the column
+    "model_id1" as the "foreign_keys" argument for "model1" to your
+    callable above, pass in "{'model1': 'model_id1'}". This is a necessity
+    to enable declarative and classical configuration in a single function.
+    """
+    def _make_model(columns=None, name='Model',
+                    defaults=None,
+                    col_name_to_attr_map=None,
+                    relationships=None, relationship_fks=None):
+        if columns is None:
+            columns = []
+        if defaults is None:
+            defaults = [Column('id', Integer, primary_key=True)]
+        if col_name_to_attr_map is None:
+            col_name_to_attr_map = {}
+        if relationships is None:
+            relationships = {}
+        if relationship_fks is None:
+            relationship_fks = {}
+
+        if request.param == 'declarative':
+            attrs = OrderedDict()
+            for col in defaults + columns:
+                attrs[col_name_to_attr_map.get(col.name, col.name)] = col
+            for rel_name, rel in relationships.items():
+                if inspect.isfunction(rel):
+                    rel_str_name = "%s.%s" % (name, relationship_fks[rel_name])
+                    attrs[rel_name] = rel(rel_str_name)
+                else:
+                    attrs[rel_name] = rel
+            Model = type(name, (Base,), attrs)
+        else:
+            table = Table(name.lower(), metadata, *tuple(defaults + columns))
+
+            properties = {}
+            for col_name, attr_name in col_name_to_attr_map.items():
+                properties[attr_name] = getattr(table.c, col_name)
+            for rel_name, rel in relationships.items():
+                if inspect.isfunction(rel):
+                    rel_col = getattr(table.c, relationship_fks[rel_name])
+                    properties[rel_name] = rel([rel_col])
+                else:
+                    properties[rel_name] = rel
+
+            class Model(object):
+                def __init__(self, **kw):
+                    self.__dict__.update(kw)
+            mapper(Model, table, properties=properties)
+        metadata.create_all(engine)
+        return Model
+    return _make_model
 
 
-@pytest.fixture(params=['declarative', 'classical'])
-def Model2_basic(Base, request, metadata):
-    if request.param == 'declarative':
-        class Model2(Base):
-            id = Column(Integer, primary_key=True)
-    else:
-        table = Table(
-            'model2', metadata,
-            Column('id', Integer, primary_key=True))
+@pytest.fixture
+def form_factory():
+    """A factory function that creates a form for each of the valid form
+       subclasses. Thus use this as a class to test form capabilities. The
+       function takes a single argument: A dict that maps attributes to
+       values for the class.
+    """
+    def make_form(fields=None, base=None, name='SubForm',
+                  model=None, bases=None):
+        if fields is None:
+            fields = {}
+        if base is None and bases is None:
+            raise ValueError("Must have a base class")
+        if base is not None and bases is not None:
+            raise ValueError("Ambigous base classes")
+        if bases is None:
+            bases = (base,)
 
-        class Model2(object):
-            pass
-        mapper(Model2, table)
-    return Model2
-
-
-@pytest.fixture(params=['declarative', 'classical'])
-def Model2_many_to_one(Base, request, Model_one_pk, metadata):
-    if request.param == 'declarative':
-        class Model2(Base):
-            id = Column(Integer, primary_key=True)
-            model_id = Column(ForeignKey('model.id'))
-            model = relationship(Model_one_pk, backref='models')
-    else:
-        table = Table(
-            'model2', metadata,
-            Column('id', Integer, primary_key=True),
-            Column('model_id', ForeignKey('model.id')))
-
-        class Model2(object):
-            pass
-        mapper(Model2, table, properties={
-            'model': relationship(Model_one_pk, backref='models')
-        })
-    return Model2
+        if model is not None:
+            fields['Meta'] = type('Meta', (object,), {'model': model})
+        return type(name, bases, fields)
+    return make_form
 
 
-@pytest.fixture(params=['declarative', 'classical'])
-def Model2_many_to_one_multiple(Base, request, Model_one_pk, metadata):
-    if request.param == 'declarative':
-        class Model2(Base):
-            id = Column(Integer, primary_key=True)
-            model_id1 = Column(ForeignKey('model.id'))
-            model_id2 = Column(ForeignKey('model.id'))
-            model1 = relationship(Model_one_pk, backref='models1',
-                                  foreign_keys=[model_id1])
-            model2 = relationship(Model_one_pk, backref='models2',
-                                  foreign_keys=[model_id2])
-    else:
-        table = Table(
-            'model2', metadata,
-            Column('id', Integer, primary_key=True),
-            Column('model_id1', ForeignKey('model.id')),
-            Column('model_id2', ForeignKey('model.id')))
+@pytest.fixture
+def Model_one_pk(model_factory):
+    return model_factory()
 
-        class Model2(object):
-            pass
-        mapper(Model2, table, properties={
-            'model1': relationship(Model_one_pk, backref='models1',
-                                   foreign_keys=[table.c.model_id1]),
-            'model2': relationship(Model_one_pk, backref='models2',
-                                   foreign_keys=[table.c.model_id2])
-        })
-    return Model2
+
+@pytest.fixture
+def Model_two_pk(model_factory):
+    cols = [Column('id2', Integer, primary_key=True)]
+    return model_factory(cols)
+
+
+@pytest.fixture
+def Model_diff_colname(model_factory):
+    return model_factory(defaults=[Column('id2', Integer, primary_key=True)],
+                         col_name_to_attr_map={'id2': 'id'})
+
+
+@pytest.fixture
+def Model2_basic(model_factory):
+    return model_factory(name='Model2')
+
+
+@pytest.fixture
+def Model2_many_to_one(model_factory, Model_one_pk):
+    cols = [Column('model_id', ForeignKey('model.id'))]
+    relationships = {
+        'model': relationship(Model_one_pk, backref='models')
+    }
+    return model_factory(cols, 'Model2', relationships=relationships)
+
+
+@pytest.fixture
+def Model2_many_to_one_multiple(model_factory, Model_one_pk):
+    cols = [Column('model_id1', ForeignKey('model.id')),
+            Column('model_id2', ForeignKey('model.id'))]
+    relationships = {
+        'model1': lambda fks: relationship(Model_one_pk, backref='models1',
+                                           foreign_keys=fks),
+        'model2': lambda fks: relationship(Model_one_pk, backref='models2',
+                                           foreign_keys=fks),
+    }
+    relationship_fks = {
+        'model1': 'model_id1',
+        'model2': 'model_id2',
+    }
+    return model_factory(cols, 'Model2', relationships=relationships,
+                         relationship_fks=relationship_fks)

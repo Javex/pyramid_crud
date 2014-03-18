@@ -32,3 +32,50 @@ class classproperty(object):
 
     def __get__(self, instance, owner):
         return self.getter(owner)
+
+
+class meta_property(property):
+    """
+    A direct subclass of :class:`property` that uses an overriden value on
+    a class in precedence of the value returned by the decorator.
+
+    This is to be used on a metaclass instead of :class:`property`. This will
+    turn the method into a class property but additionally allows inheritance
+    of property as an attribute on subclasses.
+
+    An example clarifies this:
+
+    .. code-block:: python
+
+
+        class Meta(type):
+            @meta_property
+            def test(self):
+                return "Meta"
+
+
+        class Test(object):
+            __metaclass__ = Meta
+
+
+        class TestSub(Test):
+            test = "TestSub"
+
+
+        class TestSubWithout(Test):
+            pass
+
+        print(TestSub.test, TestSubWithout.test)
+
+    This will print ``('TestSub', 'Meta')`` instead of ``('Meta', 'Meta')`` as
+    it would happen when using the usual :class:`property`.
+    """
+    def __init__(self, fget, fset=None, fdel=None, doc=None):
+        self.key = fget.__name__
+        super(meta_property, self).__init__(fget, fset, fdel, doc)
+
+    def __get__(self, obj, type_):
+        if self.key in obj.__dict__:
+            return obj.__dict__[self.key]
+        else:
+            return super(meta_property, self).__get__(obj, type_)

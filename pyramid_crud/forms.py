@@ -1,8 +1,7 @@
-from wtforms_alchemy import model_form_factory
+import wtforms_alchemy
 from wtforms.ext.csrf.form import SecureForm
 from wtforms.fields import SubmitField
-from wtforms.form import Form
-from .util import classproperty, get_pks
+from .util import get_pks, meta_property
 from sqlalchemy.orm.session import object_session
 from sqlalchemy.inspection import inspect
 from webob.multidict import MultiDict
@@ -16,22 +15,116 @@ except:
 log = logging.getLogger(__name__)
 
 
-class BaseModelForm(Form):
+class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
+    """
+    Metaclass for :class:`_CoreModelForm`. Assignes some class properties. Not
+    to be used directly.
+    """
+
+    @meta_property
+    def title(cls):
+        """
+        The title. By default this returns the class name of the model. It is
+        used in different places such as the title of the page.
+        """
+        return inspect(cls.Meta.model).class_.__name__
+
+    @meta_property
+    def title_plural(cls):
+        """
+        The plural title. By default it is the title with an "s" appended.
+        """
+        return cls.title + "s"
+
+    @meta_property
+    def name(cls):
+        """
+        The name of this form. By default it uses the lowercase model class
+        name.
+        """
+        return inspect(cls.Meta.model).class_.__name__.lower()
+
+    @meta_property
+    def field_names(cls):
+        """
+        A property on the class that returns a list of field names for the
+        associated form.
+
+        :return: A list of all names defined in the field in the same order as
+            they are defined on the form.
+        :rtype: list of str
+        """
+        return [field.name for field in cls()]
+
+    @meta_property
+    def fieldsets(cls):
+        return [(None, {'fields': cls.field_names})]
+
+
+class _CoreModelForm(wtforms_alchemy.ModelForm):
     """
     Base class for all complex form actions. This is used instead of the usual
-    form class.
+    form class. Not to be used directly.
     """
-    inlines = []
+    __metaclass__ = _CoreModelMeta
 
     def __init__(self, formdata=None, obj=None, *args, **kw):
         self.obj = obj
         self.formdata = formdata
-        Form.__init__(self, formdata, obj, *args, **kw)
+        super(_CoreModelForm, self).__init__(formdata, obj, *args, **kw)
 
     @property
-    def fieldsets(self):
-        return [(None, {'fields': [field.name for field in self]})]
+    def primary_keys(self):
+        """
+        Get a list of pairs ``name, value`` of primary key names and their
+        values on the current object.
+        """
+        if self.obj is None:
+            raise AttributeError("No object attached")
+        return [(pk, getattr(self.obj, pk, None))
+                for pk in get_pks(self.Meta.model)]
 
+
+class CSRFForm(SecureForm):
+    """
+    Base class from which new CSRF-protected forms are derived. Only use this
+    if you want to create a form without the extra model-functionality, i.e.
+    is normal form.
+
+    If you want to create a CSRF-protected model form use
+    :class:`CSRFModelForm`.
+    """
+
+    def generate_csrf_token(self, csrf_context):
+        """
+        Create a CSRF token from the given context (which is actually just a
+        :class:`pyramid.request.Request` instance). This is automatically
+        called during ``__init__``.
+        """
+        self.request = csrf_context
+        return self.request.session.get_csrf_token()
+
+    def validate(self):
+        """
+        Validate the form and with it the CSRF token. Logs a warning with the
+        error message and the remote IP address in case of an invalid token.
+        """
+        result = SecureForm.validate(self)
+        if not result and self.csrf_token.errors:
+            log.warn("Invalid CSRF token with error(s) '%s' from IP address "
+                     "'%s'."
+                     % (", ".join(self.csrf_token.errors),
+                        self.request.client_addr))
+        return result
+
+
+class ModelForm(_CoreModelForm):
+    """
+    Base-class for all regular forms.
+    """
+    inlines = []
+
+    @classmethod
     def _relationship_key(self, other_form):
         """
         Get the name of the attribute that is the relationship between this
@@ -64,7 +157,7 @@ class BaseModelForm(Form):
         return candidates[0]
 
     def process(self, formdata=None, obj=None, **kwargs):
-        Form.process(self, formdata, obj, **kwargs)
+        super(ModelForm, self).process(formdata, obj, **kwargs)
         self.process_inline(formdata, obj, **kwargs)
 
     def process_inline(self, formdata=None, obj=None, **kwargs):
@@ -155,7 +248,7 @@ class BaseModelForm(Form):
             self.inline_fieldsets[inline.name] = inline, inline_forms
 
     def populate_obj(self, obj):
-        Form.populate_obj(self, obj)
+        super(ModelForm, self).populate_obj(obj)
         self.populate_obj_inline(obj)
 
     def populate_obj_inline(self, obj):
@@ -168,6 +261,7 @@ class BaseModelForm(Form):
             Right now this assumes the relationship operation is a ``append``,
             thus for example set collections won't work right now.
         """
+        session = object_session(obj)
         for inline in self.inlines:
             _, forms = self.inline_fieldsets[inline.name]
             inline_model = inline.Meta.model
@@ -175,7 +269,6 @@ class BaseModelForm(Form):
                 # Get the primary keys from the form. This ensures that we
                 # update existing objects while new objects get inserted.
                 pks = inline.pks_from_formdata(self.formdata, index)
-                session = object_session(obj)
                 if pks is not None:
                     inline_obj = session.query(inline.Meta.model).get(pks)
                 else:
@@ -189,64 +282,14 @@ class BaseModelForm(Form):
                 # it as we would do with a normal form and object.
                 form.populate_obj(inline_obj)
 
-    @property
-    def primary_keys(self):
-        """
-        Get a list of pairs ``name, value`` of primary key names and their
-        values on the current object.
-        """
-        return [(pk, getattr(self.obj, pk, None))
-                for pk in get_pks(self.Meta.model)]
 
-
-class BaseInLine(object):
+class BaseInLine(_CoreModelForm):
+    """
+    Base-class for all inline forms.
+    """
+    __metaclass__ = _CoreModelMeta
     extra = 0
     relationship_name = None
-
-    @classproperty
-    def title(self):
-        """
-        The title. By default this returns the class name of the model. It is
-        used in different places such as the title of the page.
-        """
-        return inspect(self.Meta.model).class_.__name__
-
-    @classproperty
-    def title_plural(self):
-        """
-        The plural title. By default it is the title with an "s" appended.
-        """
-        return self.title + "s"
-
-    @classproperty
-    def name(self):
-        """
-        The name of this inline. By default it uses the lowercase model class
-        name.
-        """
-        return inspect(self.Meta.model).class_.__name__.lower()
-
-    @classproperty
-    def form(self):
-        """
-        The form associated with this class. By default this creates a new type
-        dynamically but this can be overwritten by subclasses to just return
-        an actual class defined otherwise.
-        """
-        return type('%sInlineForm' % self.name,
-                    (ModelForm,), {'Meta': self.Meta})
-
-    @classproperty
-    def field_names(self):
-        """
-        A :class:`.classproperty` that returns a list of field names for the
-        associated form.
-
-        :return: A list of all names defined in the field in the same order as
-            they are defined on the form.
-        :rtype: list of str
-        """
-        return [field.name for field in self.form()]
 
     @classmethod
     def pks_from_formdata(cls, formdata, index):
@@ -288,43 +331,6 @@ class TabularInLine(BaseInLine):
     """
     template = 'default/edit_inline/tabular.mako'
     """The default template for tabular display"""
-
-
-class CSRFForm(SecureForm):
-    """
-    Base class from which new CSRF-protected forms are derived. Only use this
-    if you want to create a form without the extra model-functionality, i.e.
-    is normal form.
-
-    If you want to create a CSRF-protected model form use
-    :class:`CSRFModelForm`.
-    """
-
-    def generate_csrf_token(self, csrf_context):
-        """
-        Create a CSRF token from the given context (which is actually just a
-        :class:`pyramid.request.Request` instance). This is automatically
-        called during ``__init__``.
-        """
-        self.request = csrf_context
-        return self.request.session.get_csrf_token()
-
-    def validate(self):
-        """
-        Validate the form and with it the CSRF token. Logs a warning with the
-        error message and the remote IP address in case of an invalid token.
-        """
-        result = SecureForm.validate(self)
-        if not result and self.csrf_token.errors:
-            log.warn("Invalid CSRF token with error(s) '%s' from IP address "
-                     "'%s'."
-                     % (", ".join(self.csrf_token.errors),
-                        self.request.client_addr))
-        return result
-
-
-ModelForm = model_form_factory(BaseModelForm)
-"""The base class for all non-critical forms and subforms."""
 
 
 class CSRFModelForm(ModelForm, CSRFForm):

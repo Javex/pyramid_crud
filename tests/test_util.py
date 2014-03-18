@@ -20,10 +20,12 @@ def test_classproperty():
 class Test_get_pks(object):
 
     def test_single_pk(self, Model_one_pk):
-        assert util.get_pks(Model_one_pk) == ['id']
+        assert sorted(util.get_pks(Model_one_pk)) == ['id']
 
     def test_multiple_pks(self, Model_two_pk):
-        assert util.get_pks(Model_two_pk) == ['id', 'id2']
+        assert sorted(util.get_pks(Model_two_pk)) == ['id', 'id2']
 
     def test_different_colname(self, Model_diff_colname):
-        assert util.get_pks(Model_diff_colname) == ['id']
+        assert sorted(util.get_pks(Model_diff_colname)) == ['id']
+
+# TODO: test meta_property
