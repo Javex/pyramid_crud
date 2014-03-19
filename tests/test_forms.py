@@ -40,8 +40,8 @@ def generic_obj(Base):
 def get_obj_test_matrix():
     "Create a matrix to test different types of objects."
     test_matrix = []
-    for type_ in ['No values', 'Parent only', 'Children only', 'Both']:
-        for children_no in range(3):
+    for type_ in ['No values', 'Parent only', 'Children only']:
+        for children_no in range(2):
             for values_on_children_no in range(children_no + 1):
                 test_matrix.append((type_, children_no,
                                     values_on_children_no))
@@ -155,7 +155,7 @@ def form_with_inlines(request, form_factory, model_factory,
     return ParentModelForm
 
 
-@pytest.fixture(params=[0, 1, 2])
+@pytest.fixture(params=[0, 1])
 def formdata_with_inlines(request, form_with_inlines):
     Form = form_with_inlines
     "Prepare formdata to be processed"
@@ -200,13 +200,13 @@ def obj_with_inlines(request, form_with_inlines):
         getattr(obj, 'child%d' % index).append(child_obj)
 
     # pass in values depending on type_
-    if type_ == 'Parent only' or type_ == 'Both':
+    if type_ == 'Parent only':
         obj.test_text = 'ParentModel'
         obj.test_int = 2
-    if type_ == 'Children only' or type_ == 'Both':
+    if type_ == 'Children only':
         for inline_index in range(1, inline_count + 1):
             children = getattr(obj, 'child%d' % inline_index)
-            for index, child in enumerate(children):
+            for index, child in enumerate(children[:values_on_children_no]):
                 text_val = 'text_child%d_model_%d' % (inline_index, index)
                 int_val = int('1%d%d' % (inline_index, index))
                 child.test_text = text_val
@@ -238,7 +238,6 @@ class TestNormalModelFormWithInline(object):
     def test_process_inline(self, form_with_inlines, formdata_with_inlines):
         self._parse_fixtures(form_with_inlines, formdata_with_inlines)
         form = self.Form(self.formdata)
-        form.process_inline(self.formdata)
         assert len(form.inlines) == self.inline_count
         for inline_index, inline in enumerate(form.inlines):
             inline_ref, forms = form.inline_fieldsets[inline.name]
@@ -263,13 +262,84 @@ class TestNormalModelFormWithInline(object):
                                      obj_with_inlines):
         self._parse_fixtures(form_with_inlines, None, obj_with_inlines)
         form = self.Form(obj=self.obj)
-        if self.value_type == 'Parent only' or self.value_type == 'Both':
+        if self.value_type == 'Parent only':
             assert form.test_text.data == 'ParentModel'
             assert form.test_int.data == 2
+        else:
+            assert form.test_text.data is None
+            assert form.test_int.data is None
+        for inline_index, inline in enumerate(form.inlines, 1):
+            inline_ref, forms = form.inline_fieldsets[inline.name]
+            assert inline_ref is inline
+            child_key = 'child%d' % inline_index
+            children = getattr(form.obj, child_key)
+            assert len(children) == len(forms) == self.children_no
+            for child_index, (child, (inline_form, is_new)) in \
+                    enumerate(zip(children, forms)):
+                assert is_new is False
+                if self.value_type == 'Children only':
+                    text_key = ('child%d_%d_test_text'
+                                % (inline_index, child_index))
+                    int_key = ('child%d_%d_test_int'
+                               % (inline_index, child_index))
+                    assert inline_form.test_text.name == text_key
+                    assert inline_form.test_int.name == int_key
+                    if child_index <= self.values_on_children_no:
+                        assert inline_form.test_text.data == child.test_text
+                        assert inline_form.test_int.data == child.test_int
+                else:
+                    assert inline_form.test_text.data is None
+                    assert inline_form.test_int.data is None
 
-    def test_process_inline_obj_and_formdata(self):
-        pass
+    def test_process_inline_obj_and_formdata(
+            self, form_with_inlines, formdata_with_inlines, obj_with_inlines):
+        self._parse_fixtures(form_with_inlines, formdata_with_inlines,
+                             obj_with_inlines)
+        form = self.Form(self.formdata, self.obj)
+        assert form.test_text.data == 'parent'
+        assert form.test_int.data == 1
+        for inline_index, inline in enumerate(form.inlines, 1):
+            inline_ref, forms = form.inline_fieldsets[inline.name]
+            assert inline_ref is inline
+            child_key = 'child%d' % inline_index
+            children = getattr(form.obj, child_key)
+            # either number of objs or items in formdata
+            data_count = max(len(children), self.form_count)
+            assert data_count == len(forms)
+            for child_index, (child, (inline_form, is_new)) in \
+                    enumerate(zip(children, forms)):
+                if self.value_type == 'Children only':
+                    text_key = ('child%d_%d_test_text'
+                                % (inline_index, child_index))
+                    int_key = ('child%d_%d_test_int'
+                               % (inline_index, child_index))
+                    assert inline_form.test_text.name == text_key
+                    assert inline_form.test_int.name == int_key
+                    if child_index < self.form_count:
+                        if child_index <= self.values_on_children_no:
+                            assert is_new is False
+                        else:
+                            assert is_new is True
+                        assert inline_form.test_text.data == \
+                            self.formdata[text_key]
+                        assert inline_form.test_int.data == \
+                            self.formdata[int_key]
+                    elif child_index <= self.values_on_children_no:
+                        assert is_new is False
+                        assert inline_form.test_text.data == child.test_text
+                        assert inline_form.test_int.data == child.test_int
+                    else:
+                        assert is_new is False
+                        assert inline_form.test_text.data is None
+                        assert inline_form.test_int.data is None
+
     # TODO: Test process_inline deletion!
+    #   - Delete existing obj
+    #   - Delete obj that doesn't exist
+    #   - Delete field that was only in the form
+    # TODO: Test process_inline add & extra
+    #   - Add a new empty field
+    #   - Extra 0, 1, 2
     # TODO: Test populate_obj_inline
 
 
