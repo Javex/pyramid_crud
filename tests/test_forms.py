@@ -489,6 +489,16 @@ class TestNormalModelFormWithInline(object):
         assert is_new is True
         assert form.test_text.data is None
 
+    def test_process_inline_no_relationship(
+            self, model_factory, form_factory, inline_form, normal_form):
+        Model2 = model_factory(name='Model2')
+        Form2 = form_factory(model=Model2, base=inline_form)
+        Model1 = model_factory(name='Model1')
+        Form1 = form_factory({'inlines': [Form2]}, model=Model1,
+                             base=normal_form)
+        with pytest.raises(ValueError):
+            Form1()
+
     # TODO: Test populate_obj_inline
 
 
