@@ -75,7 +75,7 @@ class TestNormalModelForm(object):
         form = form_factory(base=self.base_form, model=Model_one_pk)
         OtherForm = form_factory(base=self.inline_form,
                                  model=Model2_many_to_one_multiple)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             form()._relationship_key(OtherForm)
 
     def test__relationship_key_none(self, Model_one_pk, Model2_basic,
@@ -83,7 +83,7 @@ class TestNormalModelForm(object):
         form = form_factory(base=self.base_form, model=Model_one_pk)
         OtherForm = form_factory(base=self.inline_form, model=Model2_basic)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             form()._relationship_key(OtherForm)
 
     def test__relationship_key_explicitly(self, Model_one_pk,
@@ -466,7 +466,7 @@ class TestNormalModelFormWithInline(object):
         DBSession.flush()
         formdata = MultiDict(child_count=1, delete_child_0=True, child_0_id=1)
         assert len(parent.children) == 0
-        with pytest.raises(ValueError):
+        with pytest.raises(LookupError):
             ParentForm(formdata, parent)
 
     def test_process_inline_delete_extra_field(
@@ -496,7 +496,7 @@ class TestNormalModelFormWithInline(object):
         Model1 = model_factory(name='Model1')
         Form1 = form_factory({'inlines': [Form2]}, model=Model1,
                              base=normal_form)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             Form1()
 
     # TODO: Test populate_obj_inline
@@ -575,7 +575,7 @@ class TestNormalModelFormWithInline(object):
         DBSession.delete(child)
         DBSession.expire(parent)
         assert len(parent.children) == 0
-        with pytest.raises(ValueError):
+        with pytest.raises(LookupError):
             form.populate_obj(parent)
         assert len(parent.children) == 0
 

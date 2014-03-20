@@ -148,13 +148,13 @@ class ModelForm(_CoreModelForm):
             if relationship.mapper.class_ == other_model:
                 candidates.append(relationship.key)
         if len(candidates) == 0:
-            raise ValueError("Could not find relationship between the models "
-                             "%s and %s" % (self.Meta.model, other_model))
+            raise TypeError("Could not find relationship between the models "
+                            "%s and %s" % (self.Meta.model, other_model))
         elif len(candidates) > 1:
-            raise ValueError("relationship between the models %s and %s is "
-                             "ambigous. Please specify the "
-                             "'relationship_name' attribute on %s"
-                             % (self.Meta.model, other_model, other_form))
+            raise TypeError("relationship between the models %s and %s is "
+                            "ambigous. Please specify the "
+                            "'relationship_name' attribute on %s"
+                            % (self.Meta.model, other_model, other_form))
         return candidates[0]
 
     def process(self, formdata=None, obj=None, **kwargs):
@@ -195,11 +195,6 @@ class ModelForm(_CoreModelForm):
                         if data:
                             inline_formdata[index][field] = data
 
-            # Find the matching relationship
-            key = self._relationship_key(inline)
-            if key is None:
-                raise ValueError("Could not find relationship for %s" % inline)
-
             if formdata:
                 count = formdata.get('%s_count' % inline.name)
             else:
@@ -218,14 +213,19 @@ class ModelForm(_CoreModelForm):
                             session = object_session(obj)
                             target = session.query(inline.Meta.model).get(pks)
                             if target is None:
-                                raise ValueError("Target with pks %s does not "
-                                                 "exist" % str(pks))
+                                raise LookupError("Target with pks %s does "
+                                                  "not exist" % str(pks))
                             session.delete(target)
                             # make sure the list is reloaded
                             session.expire(obj)
                             count -= 1
                         else:
                             to_delete.add(index)
+
+            # Find the matching relationship
+            # We determine this *outside* of the obj block because we want to
+            # raise this on the user if there is a problem ASAP.
+            key = self._relationship_key(inline)
 
             # Add all existing items
             if obj:
@@ -290,8 +290,8 @@ class ModelForm(_CoreModelForm):
                 if pks is not None:
                     inline_obj = session.query(inline.Meta.model).get(pks)
                     if inline_obj is None:
-                        raise ValueError("Target with pks %s does not exist"
-                                         % str(pks))
+                        raise LookupError("Target with pks %s does not exist"
+                                          % str(pks))
                 else:
                     inline_obj = inline_model()
                     relationship_key = self._relationship_key(inline)
