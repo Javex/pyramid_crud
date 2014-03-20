@@ -1,4 +1,6 @@
 from pyramid_crud import util
+from sqlalchemy import Column, ForeignKey
+from sqlalchemy.orm import relationship
 import six
 
 
@@ -28,6 +30,15 @@ class Test_get_pks(object):
 
     def test_different_colname(self, Model_diff_colname):
         assert sorted(util.get_pks(Model_diff_colname)) == ['id']
+
+    def test_with_relationship(self, model_factory):
+        Parent = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        child_rels = {'parent': relationship(Parent, backref='children')}
+        Child = model_factory(child_cols, 'Child', relationships=child_rels)
+        assert sorted(util.get_pks(Child)) == ['id']
 
 
 def test_meta_property():

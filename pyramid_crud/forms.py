@@ -200,22 +200,39 @@ class ModelForm(_CoreModelForm):
             if key is None:
                 raise ValueError("Could not find relationship for %s" % inline)
 
-            # Add all existing items
-            if obj:
-                index = -1  # Needed in case there are no items yet
-                for index, item in enumerate(getattr(obj, key)):
+            if formdata:
+                count = formdata.get('%s_count' % inline.name)
+            else:
+                count = None
+
+            # Delete items where requested
+            to_delete = set()  # Which items should be deleted?
+            if formdata and count is not None:
+                for index in range(count):
                     delete_key = 'delete_%s_%d' % (inline.name, index)
-                    if formdata and delete_key in formdata:
+                    if delete_key in formdata:
                         # Get the primary keys from the form and delete the
                         # item with the matching primary keys.
                         pks = inline.pks_from_formdata(formdata, index)
                         if pks:
                             session = object_session(obj)
                             target = session.query(inline.Meta.model).get(pks)
-                            object_session(target).delete(target)
-                    else:
-                        form = inline(inline_formdata.get(index), item)
-                        inline_forms.append((form, False))
+                            if target is None:
+                                raise ValueError("Target with pks %s does not "
+                                                 "exist" % str(pks))
+                            session.delete(target)
+                            # make sure the list is reloaded
+                            session.expire(obj)
+                            count -= 1
+                        else:
+                            to_delete.add(index)
+
+            # Add all existing items
+            if obj:
+                index = -1  # Needed in case there are no items yet
+                for index, item in enumerate(getattr(obj, key)):
+                    form = inline(inline_formdata.get(index), item)
+                    inline_forms.append((form, False))
                 max_index = index + 1
             else:
                 max_index = 0
@@ -225,10 +242,6 @@ class ModelForm(_CoreModelForm):
             # value from the form, otherwise we use the configured default.
             # In case of POST, we have to subtract the existing database items
             # from above as those fields were already added.
-            if formdata:
-                count = formdata.get('%s_count' % inline.name)
-            else:
-                count = None
             if count is None:
                 extra = inline.extra
             else:
@@ -238,13 +251,13 @@ class ModelForm(_CoreModelForm):
 
             # Add empty form items
             for index in range(max_index, extra + max_index):
-                if not formdata or \
-                        'delete_%s_%d' % (inline.name, index) not in formdata:
+                # Only add an extra field if deletion of it was not requested
+                if index not in to_delete:
                     form = inline(inline_formdata.get(index))
                     inline_forms.append((form, True))
 
             # For all forms, rename them and reassign their IDs as well. Only
-            # by this measure can be guarantee that each item can be addressed
+            # by this measure can be guaranteed that each item can be addressed
             # individually.
             for index, (form, _) in enumerate(inline_forms):
                 for field in form:

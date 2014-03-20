@@ -437,11 +437,58 @@ class TestNormalModelFormWithInline(object):
                 assert is_new is True
                 assert form.test_text.data is None
 
+    def test_process_inline_delete(
+            self, _basic_form_with_inline, DBSession):
+        ParentForm, ChildForm = _basic_form_with_inline
+        parent = ParentForm.Meta.model()
+        parent.children.append(ChildForm.Meta.model())
+        parent.children.append(ChildForm.Meta.model())
+        DBSession.add(parent)
+        DBSession.flush()
+        child0_id = parent.children[0].id
+        child1_id = parent.children[1].id
+        formdata = MultiDict(child_count=2,
+                             delete_child_0=True, child_0_id=child0_id,
+                             delete_child_1=True, child_1_id=child1_id)
+        assert len(parent.children) == 2
+        form = ParentForm(formdata, parent)
+        assert len(parent.children) == 0
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert len(forms) == 0
 
-    # TODO: Test process_inline deletion!
-    #   - Delete existing obj
-    #   - Delete obj that doesn't exist
-    #   - Delete field that was only in the form
+    def test_process_inline_nonexisting_delete(
+            self, _basic_form_with_inline, DBSession):
+        ParentForm, ChildForm = _basic_form_with_inline
+        parent = ParentForm.Meta.model()
+        DBSession.add(parent)
+        DBSession.flush()
+        formdata = MultiDict(child_count=1, delete_child_0=True, child_0_id=1)
+        assert len(parent.children) == 0
+        with pytest.raises(ValueError):
+            ParentForm(formdata, parent)
+
+    def test_process_inline_delete_extra_field(
+            self, _basic_form_with_inline):
+        ParentForm, ChildForm = _basic_form_with_inline
+        formdata = MultiDict(child_count=1, delete_child_0=True)
+        form = ParentForm(formdata)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert len(forms) == 0
+
+        formdata = MultiDict(child_count=1)
+        form = ParentForm(formdata)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert len(forms) == 1
+        form, is_new = forms[0]
+        assert is_new is True
+        assert form.test_text.data is None
+
     # TODO: Test populate_obj_inline
 
 

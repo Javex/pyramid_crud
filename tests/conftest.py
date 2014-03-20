@@ -26,7 +26,7 @@ def Base(metadata):
 
 @pytest.fixture
 def engine():
-    e = create_engine('sqlite://')
+    e = create_engine('sqlite://', echo=True)
     return e
 
 

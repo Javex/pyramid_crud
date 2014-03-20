@@ -1,4 +1,5 @@
 from sqlalchemy.inspection import inspect
+from sqlalchemy.orm.properties import ColumnProperty
 
 
 def get_pks(model):
@@ -11,6 +12,8 @@ def get_pks(model):
     pk_cols = set(pk.name for pk in inspect(model).primary_key)
     pk_attributes = []
     for prop in inspect(model).iterate_properties:
+        if not isinstance(prop, ColumnProperty):
+            continue
         if len(prop.columns) != 1:
             raise ValueError("Unexpected number of columns. Please report "
                              "this as a bug.")
