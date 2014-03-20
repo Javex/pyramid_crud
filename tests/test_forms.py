@@ -500,6 +500,84 @@ class TestNormalModelFormWithInline(object):
             Form1()
 
     # TODO: Test populate_obj_inline
+    def test_populate_obj_inline_edit(self, _basic_form_with_inline,
+                                      DBSession):
+        ParentForm, ChildForm = _basic_form_with_inline
+        child = ChildForm.Meta.model(test_text='TestVal')
+        parent = ParentForm.Meta.model()
+        parent.children.append(child)
+        DBSession.add(parent)
+        DBSession.flush()
+        assert parent.id is not None
+        assert child.id is not None
+        assert child.parent_id is not None
+        formdata = MultiDict(child_count=1, child_0_test_text='EditVal',
+                             child_0_id=child.id)
+        form = ParentForm(formdata, parent)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert len(forms) == 1
+        inline_form, is_new = forms[0]
+        assert is_new is False
+        assert inline_form.test_text.data == 'EditVal'
+        assert child.test_text == 'TestVal'
+        assert len(parent.children) == 1
+        form.populate_obj(parent)
+        assert len(parent.children) == 1
+        assert child.test_text == 'EditVal'
+        assert inline_form.test_text.data == 'EditVal'
+
+    def test_populate_obj_inline_new_obj(self, _basic_form_with_inline,
+                                         DBSession):
+        ParentForm, ChildForm = _basic_form_with_inline
+        parent = ParentForm.Meta.model()
+        DBSession.add(parent)
+        DBSession.flush()
+        assert parent.id is not None
+        formdata = MultiDict(child_count=1, child_0_test_text='NewVal')
+        form = ParentForm(formdata, parent)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert len(forms) == 1
+        inline_form, is_new = forms[0]
+        assert is_new is True
+        assert inline_form.test_text.data == 'NewVal'
+        assert len(parent.children) == 0
+        form.populate_obj(parent)
+        assert inline_form.test_text.data == 'NewVal'
+        assert len(parent.children) == 1
+        child = parent.children[0]
+        assert child.test_text == 'NewVal'
+
+    def test_populate_obj_inline_missing_obj(self, _basic_form_with_inline,
+                                             DBSession):
+        ParentForm, ChildForm = _basic_form_with_inline
+        child = ChildForm.Meta.model()
+        parent = ParentForm.Meta.model()
+        parent.children.append(child)
+        DBSession.add(parent)
+        DBSession.flush()
+        assert parent.id is not None
+        formdata = MultiDict(child_count=1, child_0_test_text='NewVal',
+                             child_0_id=child.id)
+        form = ParentForm(formdata, parent)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert len(forms) == 1
+        inline_form, is_new = forms[0]
+        assert is_new is False
+        assert inline_form.test_text.data == 'NewVal'
+        assert len(parent.children) == 1
+
+        DBSession.delete(child)
+        DBSession.expire(parent)
+        assert len(parent.children) == 0
+        with pytest.raises(ValueError):
+            form.populate_obj(parent)
+        assert len(parent.children) == 0
 
 
 # tests for all forms that inherit from _CoreModelForm (thus any form)

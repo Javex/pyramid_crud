@@ -281,15 +281,17 @@ class ModelForm(_CoreModelForm):
             thus for example set collections won't work right now.
         """
         session = object_session(obj)
-        for inline in self.inlines:
-            _, forms = self.inline_fieldsets[inline.name]
+        for inline, forms in self.inline_fieldsets.values():
             inline_model = inline.Meta.model
-            for index, (form, _) in enumerate(forms):
+            for index, (inline_form, _) in enumerate(forms):
                 # Get the primary keys from the form. This ensures that we
                 # update existing objects while new objects get inserted.
                 pks = inline.pks_from_formdata(self.formdata, index)
                 if pks is not None:
                     inline_obj = session.query(inline.Meta.model).get(pks)
+                    if inline_obj is None:
+                        raise ValueError("Target with pks %s does not exist"
+                                         % str(pks))
                 else:
                     inline_obj = inline_model()
                     relationship_key = self._relationship_key(inline)
@@ -299,7 +301,7 @@ class ModelForm(_CoreModelForm):
                 # object was loaded either from the database or newly created
                 # and added to its associated object, we can now just populate
                 # it as we would do with a normal form and object.
-                form.populate_obj(inline_obj)
+                inline_form.populate_obj(inline_obj)
 
 
 class BaseInLine(six.with_metaclass(_CoreModelMeta, _CoreModelForm)):
