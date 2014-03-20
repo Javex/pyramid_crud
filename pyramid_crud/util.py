@@ -16,7 +16,7 @@ def get_pks(model):
             continue
         if len(prop.columns) != 1:
             raise ValueError("Unexpected number of columns. Please report "
-                             "this as a bug.")
+                             "this as a bug.")  # pragma: no cover
         if prop.columns[0].name in pk_cols:
             pk_attributes.append(prop.key)
     return pk_attributes
@@ -81,4 +81,4 @@ class meta_property(object):
         if obj:
             return self.fget(obj)
         else:
-            return self
+            return self  # pragma: no cover
