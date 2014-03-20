@@ -216,6 +216,26 @@ def obj_with_inlines(request, form_with_inlines):
 
 class TestNormalModelFormWithInline(object):
 
+    @pytest.fixture
+    def _basic_form_with_inline(self, model_factory, form_factory, inline_form,
+                                normal_form):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+            Column('test_text', String),
+        ]
+        child_rels = {'parent': relationship(ParentModel, backref='children')}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+        ChildForm = form_factory(model=ChildModel, base=inline_form)
+        ParentForm = form_factory({'inlines': [ChildForm]}, model=ParentModel,
+                                  base=normal_form)
+        return ParentForm, ChildForm
+
+    @pytest.fixture(params=[0, 1, 2])
+    def extra(self, request):
+        return request.param
+
     def _parse_fixtures(self, form_with_inlines=None,
                         formdata_with_inlines=None,
                         obj_with_inlines=None):
@@ -333,13 +353,95 @@ class TestNormalModelFormWithInline(object):
                         assert inline_form.test_text.data is None
                         assert inline_form.test_int.data is None
 
+    def test_process_inline_add(self, _basic_form_with_inline):
+        ParentForm, ChildForm = _basic_form_with_inline
+        formdata = MultiDict(add_child='Add')
+        form = ParentForm(formdata)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert len(forms) == 1
+        assert inline == ChildForm
+        form, is_new = forms[0]
+        assert is_new is True
+        assert form.test_text.data is None
+
+    def test_process_inline_extra(self, extra, _basic_form_with_inline):
+        ParentForm, ChildForm = _basic_form_with_inline
+        ChildForm.extra = extra
+        form = ParentForm()
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert inline.extra == extra
+        assert len(forms) == extra
+        for form, is_new in forms:
+            assert is_new is True
+            assert form.test_text.data is None
+
+    def test_process_inline_extra_obj(self, extra, _basic_form_with_inline):
+        ParentForm, ChildForm = _basic_form_with_inline
+        ChildForm.extra = extra
+        parent = ParentForm.Meta.model()
+        child = ChildForm.Meta.model()
+        child.test_text = 'TestValue'
+        child.parent = parent
+
+        form = ParentForm(obj=parent)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert inline.extra == extra
+        assert len(forms) == extra + 1
+        for index, (form, is_new) in enumerate(forms):
+            if index == 0:
+                assert is_new is False
+                assert form.test_text.data == 'TestValue'
+            else:
+                assert is_new is True
+                assert form.test_text.data is None
+
+    def test_process_inline_extra_formdata(self,
+                                           _basic_form_with_inline):
+        ParentForm, ChildForm = _basic_form_with_inline
+        ChildForm.extra = 3
+        formdata = MultiDict(child_count=5)
+        form = ParentForm(formdata)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert inline.extra == 3
+        assert len(forms) == 5
+        for form, is_new in forms:
+            assert is_new is True
+            assert form.test_text.data is None
+
+    def test_process_inline_extra_obj_formdata(
+            self, _basic_form_with_inline):
+        ParentForm, ChildForm = _basic_form_with_inline
+        ChildForm.extra = 3
+        parent = ParentForm.Meta.model()
+        parent.children.append(ChildForm.Meta.model(test_text='TestValue'))
+        formdata = MultiDict(child_count=5)
+
+        form = ParentForm(formdata, parent)
+        assert len(form.inline_fieldsets) == 1
+        inline, forms = form.inline_fieldsets['child']
+        assert inline is ChildForm
+        assert inline.extra == 3
+        assert len(forms) == 5
+        for index, (form, is_new) in enumerate(forms):
+            if index == 0:
+                assert is_new is False
+                assert form.test_text.data == 'TestValue'
+            else:
+                assert is_new is True
+                assert form.test_text.data is None
+
+
     # TODO: Test process_inline deletion!
     #   - Delete existing obj
     #   - Delete obj that doesn't exist
     #   - Delete field that was only in the form
-    # TODO: Test process_inline add & extra
-    #   - Add a new empty field
-    #   - Extra 0, 1, 2
     # TODO: Test populate_obj_inline
 
 

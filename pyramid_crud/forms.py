@@ -238,7 +238,8 @@ class ModelForm(_CoreModelForm):
 
             # Add empty form items
             for index in range(max_index, extra + max_index):
-                if 'delete_%s_%d' % (inline.name, index) not in formdata:
+                if not formdata or \
+                        'delete_%s_%d' % (inline.name, index) not in formdata:
                     form = inline(inline_formdata.get(index))
                     inline_forms.append((form, True))
 
