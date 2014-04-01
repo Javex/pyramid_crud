@@ -16,6 +16,10 @@ log = logging.getLogger(__name__)
 
 
 class CRUDCreator(type):
+    """
+    Metaclass for :class:`CRUDView` to handle automatically registering views
+    for new subclasses.
+    """
 
     def __init__(cls, name, bases, attrs):
         def cb(context, name, ob):
@@ -121,6 +125,10 @@ class CRUDView(object):
     def delete_form(self):
         """
         Get the delete form instance, creating a new one if there is none yet.
+        This will always return the same instance after multiple calls. This
+        shouldn't lead to problems even when the same instance is used for
+        multiple elements (like in a list display) since only a button and
+        the CSRF hidden field exist on it.
         """
         if self._delete_form is None:
             self._delete_form = self.delete_form_factory(
@@ -271,7 +279,7 @@ class CRUDView(object):
         """
         Delete an item. This is the default method for handling deletion and
         can be overridden by subclasses. It only accepts POST request. It has
-        not template attached but returns a redirect.
+        no template attached and instead always returns a redirect.
 
         :return: An instance of :class:`.HTTPFound` to redirect the user,
             either deletion was successful or an error has happened.

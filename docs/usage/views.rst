@@ -16,5 +16,4 @@ API
 .. automodule:: pyramid_crud.views
 
 .. autoclass:: CRUDView
-
-.. autoclass:: CRUDCreator
+    :members:
