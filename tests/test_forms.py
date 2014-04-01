@@ -3,7 +3,10 @@ from webob.multidict import MultiDict
 from wtforms.fields import StringField, IntegerField
 from sqlalchemy import Column, String, Integer, ForeignKey, inspect
 from sqlalchemy.orm import relationship
-from mock import MagicMock
+try:
+    from unittest.mock import MagicMock
+except ImportError:
+    from mock import MagicMock
 from itertools import product
 import pytest
 
@@ -16,15 +19,6 @@ def formdata():
 @pytest.fixture
 def form():
     return forms.ModelForm
-
-
-@pytest.fixture
-def subform():
-
-    class SubForm(forms.ModelForm):
-        test = StringField()
-
-    return SubForm
 
 
 @pytest.fixture

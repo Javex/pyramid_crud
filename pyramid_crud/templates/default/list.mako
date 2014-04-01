@@ -46,8 +46,8 @@
                     % endfor
                     <td>
                         <form method="POST" action="${view._delete_route(item)}">
-                            ${view.delete_form.button()}
-                            ${view.delete_form.csrf_token}
+                            ${view.delete_form().button()}
+                            ${view.delete_form().csrf_token}
                         </form>
                     </td>
                 </tr>

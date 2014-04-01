@@ -4,11 +4,16 @@ from sqlalchemy import (Column, Integer, Table, MetaData, ForeignKey,
 from sqlalchemy.orm import mapper, relationship, Session
 import pytest
 import inspect
+from pyramid import testing
 from tests import all_forms, normal_forms, inline_forms
 try:
     from collections import OrderedDict
-except:
+except ImportError:
     from ordereddict import OrderedDict
+try:
+    from unittest.mock import MagicMock
+except ImportError:
+    from mock import MagicMock
 
 
 @pytest.fixture
@@ -33,6 +38,27 @@ def engine():
 @pytest.fixture
 def DBSession(engine):
     return Session(bind=engine)
+
+
+@pytest.fixture
+def pyramid_request():
+    request = testing.DummyRequest()
+    request.client_addr = '127.0.0.1'
+    return request
+
+
+@pytest.fixture
+def session(pyramid_request):
+    session = MagicMock()
+    pyramid_request.session = session
+    return session
+
+
+@pytest.fixture
+def config(pyramid_request, request):
+    cfg = testing.setUp(request=pyramid_request)
+    request.addfinalizer(testing.tearDown)
+    return cfg
 
 
 @pytest.fixture
@@ -137,10 +163,18 @@ def model_factory(request, Base, metadata, engine):
 
 @pytest.fixture
 def form_factory():
-    """A factory function that creates a form for each of the valid form
-       subclasses. Thus use this as a class to test form capabilities. The
-       function takes a single argument: A dict that maps attributes to
-       values for the class.
+    """A factory function to create a form. The following arguments are
+    accepted:
+
+    * fields: A dictionary mapping attribute/field names to WTForms fields,
+              defaults to an empty set of fields.
+    * base: A base class to use, either this or bases is required.
+    * bases: A tuple of base classes, can be specified if more than one base is
+             desired.
+    * name: An optional name, defaults to "SubForm"
+    * model: The model to be used for the form. May be none, but  should
+             normally be specified. If it is given, it is used as the "model"
+             attribute of the "Meta" class.
     """
     def make_form(fields=None, base=None, name='SubForm',
                   model=None, bases=None):
