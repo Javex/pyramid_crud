@@ -21,10 +21,8 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
     Metaclass for :class:`_CoreModelForm`. Assignes some class properties. Not
     to be used directly.
     """
-
-    def __init__(cls, name, bases, attrs):
+    def __new__(meta, name, bases, attrs):
         # Copy over docstrings from parents
-
         def get_mro_classes(bases):
             return (mro_cls for base in bases for mro_cls in base.mro())
         if not('__doc__' in attrs and attrs['__doc__']):
@@ -41,6 +39,7 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
                     if doc:
                         attribute.__doc__ = doc
                         break
+        return wtforms_alchemy.ModelFormMeta.__new__(meta, name, bases, attrs)
 
     @meta_property
     def title(cls):
