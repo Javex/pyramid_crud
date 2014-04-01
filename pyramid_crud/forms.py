@@ -22,6 +22,26 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
     to be used directly.
     """
 
+    def __init__(cls, name, bases, attrs):
+        # Copy over docstrings from parents
+
+        def get_mro_classes(bases):
+            return (mro_cls for base in bases for mro_cls in base.mro())
+        if not('__doc__' in attrs and attrs['__doc__']):
+            for mro_cls in get_mro_classes(bases):
+                doc = mro_cls.__doc__
+                if doc:
+                    attrs['__doc__'] = doc
+                    break
+        for attr, attribute in attrs.items():
+            if not attribute.__doc__:
+                for mro_cls in (mro_cls for mro_cls in get_mro_classes(bases)
+                                if hasattr(mro_cls, attr)):
+                    doc = getattr(getattr(mro_cls, attr), '__doc__')
+                    if doc:
+                        attribute.__doc__ = doc
+                        break
+
     @meta_property
     def title(cls):
         """
@@ -62,8 +82,8 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
         return [(None, {'fields': cls.field_names})]
 
 
-class _CoreModelForm(six.with_metaclass(_CoreModelMeta,
-                                        wtforms_alchemy.ModelForm)):
+@six.add_metaclass(_CoreModelMeta)
+class _CoreModelForm(wtforms_alchemy.ModelForm):
     """
     Base class for all complex form actions. This is used instead of the usual
     form class. Not to be used directly.
@@ -304,7 +324,8 @@ class ModelForm(_CoreModelForm):
                 inline_form.populate_obj(inline_obj)
 
 
-class BaseInLine(six.with_metaclass(_CoreModelMeta, _CoreModelForm)):
+@six.add_metaclass(_CoreModelMeta)
+class BaseInLine(_CoreModelForm):
     """
     Base-class for all inline forms.
     """

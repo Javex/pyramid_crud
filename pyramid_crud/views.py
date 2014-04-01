@@ -61,54 +61,51 @@ class CRUDView(object):
     """
     The base class for all views. Views directly or indirectly subclassed from
     this define actual views (or intermediate base classes, if ``__abstract__``
-    is ``True``.
+    is ``True``).
 
     The following attributes can be defined to override behavior of the view:
 
     ``Form``: Mandatory argument that specifies the form class for which this
-        view should be created. This must be a form as described in FORM DOCS
-
-        .. todo::
-            Form Docs
+    view should be created. This must be a form as described in :ref:`forms`.
 
     ``url_path``: Mandatory argument for defining the base path under which
-                  this view should be available.
+    this view should be available.
 
     ``dbsession``: Return the current SQLAlchemy session. By default this
-        expects a ``dbsession`` attribute on the ``request`` object. It is
-        **mandatory** that you either attach the attribute using an event
-        or override this attribute (you can use a :class:`property` if you
-        like).
+    expects a ``dbsession`` attribute on the ``request`` object. It is
+    **mandatory** that you either attach the attribute using an event
+    or override this attribute (you can use a :class:`property` if you
+    like).
 
     ``title``: The title of the view. By default it uses the name of the model
-        class.
+    class.
 
     ``title_plural``: The title when used in plural. By default this attached
-        an "s" to the ``title``.
+    an "s" to the ``title``.
 
     ``template_dir``: The directory where to find templates. The default
-        templates are provided in the ``default`` folder.
+    templates are provided in the ``default`` folder.
 
     ``template_ext``: Which file extension to use for templates. By default,
-        Mako templates are used and so the extension is ``.mako`` but any
-        rendered that is recognized by pramid can be used.
+    Mako templates are used and so the extension is ``.mako`` but any
+    rendered that is recognized by pramid can be used.
 
     ``template_base_name``: The name of the base template, i.e. from which all
-        templates should inherit. Using this you can override the general style
-        of the page using a single template instead of having to copy all of
-        them and editing them one-by-one. It defaults to ``base``.
+    templates should inherit. Using this you can override the general style
+    of the page using a single template instead of having to copy all of
+    them and editing them one-by-one. It defaults to ``base``.
 
     ``button_form``: The form which to use for button actions that should be
-        protected by CSRF. Normally, this does not need to be overridden,
-        except if a change in those button-only forms such as the delete button
-        in the list view is desired. Contrary to a Link this is a necessity to
-        prevent CSRF attacks.
+    protected by CSRF. Normally, this does not need to be overridden,
+    except if a change in those button-only forms such as the delete button
+    in the list view is desired. Contrary to a Link this is a necessity to
+    prevent CSRF attacks.
 
     ``delete_form_factory``: A callable which creates a delete form suitable
-        for being displayed as a button to delete an item. By default this is
-        based on the ``button_form`` attribute and additionally to all
-        typical arguments being accepted, it sets the button value to
-        ``Delete``.
+    for being displayed as a button to delete an item. By default this is
+    based on the ``button_form`` attribute and additionally to all
+    typical arguments being accepted, it sets the button value to
+    ``Delete``.
     """
     __abstract__ = True
     template_dir = 'default'

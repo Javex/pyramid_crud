@@ -58,11 +58,13 @@ API
 
 .. automodule:: pyramid_crud.forms
 
-.. autoclass:: BaseModelForm
+.. autoclass:: ModelForm
     :members:
+    :inherited-members:
 
 .. autoclass:: BaseInLine
     :members:
+    :inherited-members:
 
 .. autoclass:: TabularInLine
     :members:
