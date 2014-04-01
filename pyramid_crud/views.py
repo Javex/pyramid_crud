@@ -50,7 +50,7 @@ class CRUDCreator(type):
                             request_method='POST')
         if '__abstract__' not in attrs:
             have_attrs = set(attrs)
-            need_attrs = {'Form', 'url_path'}
+            need_attrs = set(('Form', 'url_path'))
             if have_attrs & need_attrs != need_attrs:
                 missing = need_attrs - (have_attrs & need_attrs)
                 raise AttributeError(
