@@ -29,12 +29,12 @@ extras_require = {
 }
 
 # Below Python 2.7
-if sys.version_info.major == 2 and sys.version_info.minor < 7:
+if sys.version_info[0] == 2 and sys.version_info[1] < 7:
     requires += ['ordereddict>=1.1']
 
 
-if (sys.version_info.major == 2 or
-        sys.version_info.major == 3 and sys.version_info.minor < 3):
+if (sys.version_info[0] == 2 or
+        sys.version_info[0] == 3 and sys.version_info[1] < 3):
     extras_require['test'] += 'mock'
 
 
