@@ -341,15 +341,15 @@ class CRUDView(object):
         except ValueError as exc:
             log.info("Invalid Request for primary keys: %s threw exception %s"
                      % (self.request.matchdict, exc))
-            self.request.session.flash("Invalid URL")
+            self.request.session.flash("Invalid URL", 'error')
             raise self.redirect(self.route_name('list'))
 
         if pks is not None:
-            is_new = True
+            is_new = False
             obj = self.dbsession.query(Model).get(tuple(pks.values()))
             form = self.Form(self.request.POST, obj, csrf_context=self.request)
         else:
-            is_new = False
+            is_new = True
             form = self.Form(self.request.POST, csrf_context=self.request)
         form.session = self.request.dbsession
 
@@ -364,10 +364,11 @@ class CRUDView(object):
                     break
             else:
                 for key in self.request.POST:
-                    # increase the extra choices by one
+                    # handled by inline, we are not done editing yet
                     if key.startswith("add_") or key.startswith("delete_"):
                         return retparams
-                raise ValueError("Unmatched/Missing Action")
+                raise ValueError("Unmatched/Missing Action %s"
+                                 % self.request.POST)
 
             if not form.validate():
                 return retparams
@@ -394,6 +395,8 @@ class CRUDView(object):
             elif action == 'save_new':
                 return self.redirect(self.route_name('new'))
             else:
-                raise ValueError("Unmatched action")
+                # just a saveguard, this is should actually be unreachable
+                # because we already check above
+                raise ValueError("Unmatched action")  # pragma: no cover
         else:
             return retparams

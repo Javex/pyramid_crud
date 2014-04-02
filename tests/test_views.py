@@ -31,11 +31,11 @@ class TestNormalViewDefaults(object):
 
     @pytest.fixture(autouse=True)
     def _prepare_view(self, pyramid_request, DBSession, form_factory,
-                      model_factory, normal_form):
+                      model_factory):
         self.request = pyramid_request
         self.request.POST = MultiDict(self.request.POST)
         self.Model = model_factory([Column('test_text', String)])
-        self.Form = form_factory(model=self.Model, base=normal_form)
+        self.Form = form_factory(model=self.Model, base=forms.CSRFModelForm)
         self.request.dbsession = DBSession
         self.session = DBSession
 
@@ -47,7 +47,7 @@ class TestNormalViewDefaults(object):
 
     @pytest.fixture
     def obj(self):
-        obj = self.Model()
+        obj = self.Model(test_text='test')
         self.session.add(obj)
         self.session.flush()
         assert obj.id
@@ -186,6 +186,96 @@ class TestNormalViewDefaults(object):
         flash = self.request.session.flash
         flash.assert_called_once_with('Delete failed.', 'error')
 
+    @pytest.mark.usefixtures("csrf_token")
+    @pytest.mark.parametrize("is_new", [True, False])
+    def test_edit_GET(self, obj, is_new):
+        self.request.POST = MultiDict()
+        if not is_new:
+            self.request.matchdict['id'] = obj.id
+        params = self.view.edit()
+        assert self.request.session.flash.call_count == 0
+        assert len(params) == 2
+        assert params['is_new'] is is_new
+        form = params['form']
+        assert len(list(form))
+        if not is_new:
+            assert form.test_text.data == 'test'
+        else:
+            assert not form.test_text.data
 
-# Test with multiple PK
-# Test ValueError on get_request_pks for only one PK given
+    @pytest.mark.usefixtures("route_setup", "session")
+    def test_edit_request_pks_exc(self):
+        exc_mock = MagicMock(side_effect=ValueError("Either all primary keys "
+                                                    "have to be set or None"))
+        self.view._get_request_pks = exc_mock
+        with pytest.raises(HTTPFound):
+            self.view.edit()
+        exc_mock.assert_called_once_with()
+        flash = self.request.session.flash
+        flash.assert_called_once_with('Invalid URL', 'error')
+
+    @pytest.fixture(params=['edit', 'new'])
+    def edit_run_factory(self, obj, csrf_token, route_setup, request):
+        """
+        Runs an edit with a given action.
+        """
+        def run(action, test_text='testval', is_successful=True):
+            self.request.method = 'POST'
+            if request.param == 'edit':
+                self.request.matchdict['id'] = obj.id
+            self.request.POST['test_text'] = test_text
+            self.request.POST[action] = "Foo"
+            # either redirect or retparams
+            retval = self.view.edit()
+            flash = self.request.session.flash
+            if is_successful:
+                assert flash.call_count == 1
+                args, kw = flash.call_args
+                assert len(args) == 1
+                assert len(kw) == 0
+                if request.param == 'edit':
+                    assert "edited" in args[0]
+                    new_obj = obj
+                else:
+                    assert "added" in args[0]
+                    # We have a new object
+                    new_obj = (self.session.query(self.Model).
+                               filter(self.Model.id != obj.id).one())
+                assert new_obj.test_text == test_text
+                assert isinstance(retval, HTTPFound)
+                return retval.location, new_obj
+            else:
+                is_new = request.param == 'new'
+                return retval, is_new
+        return run
+
+    def test_edit_save(self, edit_run_factory):
+        location, obj = edit_run_factory('save')
+        assert location == 'http://example.com/test/%d' % obj.id
+
+    def test_edit_save_no_value(self, obj, edit_run_factory):
+        obj.test_text = 'Foo'
+        location, obj = edit_run_factory('save', None)
+        assert location == 'http://example.com/test/%d' % obj.id
+
+    def test_edit_save_new(self, edit_run_factory):
+        location, _ = edit_run_factory('save_new')
+        assert location == 'http://example.com/test/new'
+
+    def test_edit_save_close(self, edit_run_factory):
+        location, _ = edit_run_factory('save_close')
+        assert location == 'http://example.com/test'
+
+    def test_edit_invalid_action(self, edit_run_factory):
+        self.request.method = 'POST'
+        with pytest.raises(ValueError):
+            edit_run_factory('invalid_action')
+
+    def test_edit_invalid_form(self, edit_run_factory, request):
+        del self.request.POST['csrf_token']
+        params, is_new = edit_run_factory('save', is_successful=False)
+        assert len(params) == 2
+        assert params['is_new'] is is_new
+        form = params['form']
+        assert len(form.errors) == 1
+        assert form.csrf_token.errors
