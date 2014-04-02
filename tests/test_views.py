@@ -334,7 +334,7 @@ class TestCrudCreator(object):
 
     def test_route_setup(self):
         View = self.make_view(Form=self.Form, url_path='/test')
-        cb = View.__venusian_callbacks__.values()[0][0][0]
+        cb = list(View.__venusian_callbacks__.values())[0][0][0]
         context = MagicMock()
         cb(context, None, None)
         config = context.config.with_package()
