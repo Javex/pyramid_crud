@@ -95,6 +95,14 @@ def test_includeme_mako(config):
     assert mako_dirs == ['pyramid_crud:templates']
 
 
+@pytest.mark.usefixtures("custom_settings", "session_factory", "mako_renderer")
+def test_includeme_mako_dirs_str(config):
+    config.add_settings({'mako.directories': ''})
+    pyramid_crud.includeme(config)
+    settings = config.get_settings()
+    assert settings['mako.directories'] == ['pyramid_crud:templates']
+
+
 @pytest.mark.usefixtures("session_factory")
 def test_includeme_no_template(config):
     config.add_settings({'crud.template_renderer': 'None'})
