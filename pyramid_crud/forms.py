@@ -382,10 +382,15 @@ class CSRFModelForm(ModelForm, CSRFForm):
     Do not derive from this for inline stuff and other composite forms: Only
     the main form should use this as you only need one token per request.
     """
-    def __init__(self, formdata=None, obj=None, csrf_context=None, *args,
-                 **kwargs):
-        ModelForm.__init__(self, formdata, obj, *args, **kwargs)
-        self.csrf_token.current_token = self.generate_csrf_token(csrf_context)
+    # Developer Note: This form works through multiple inheritance. But the
+    # CSRFForm is not a typical mixin, it derives from the Form class whereas
+    # ModelForm also derives from it. As a result, Python's C3 implementation
+    # resolves this a bit unintuitively. However, this actually saves as: The
+    # calling goes up to the wtforms_alchemy.ModelForm but then, instead of
+    # going to wtforms.Form, it goes to CSRFForm. Thus, as long as the parent
+    # is always called with super() throughout the inheritance chain, this
+    # works without needing to implement a custom __init__ that merges both
+    # forms.
 
 
 class ButtonForm(CSRFForm):
