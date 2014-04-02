@@ -8,7 +8,7 @@ from .forms import ButtonForm
 from sqlalchemy import inspect
 try:
     from collections import OrderedDict
-except:
+except ImportError:  # pragma: no cover
     from ordereddict import OrderedDict
 
 

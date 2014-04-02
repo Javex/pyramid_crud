@@ -18,6 +18,7 @@ refer there to see how your goal can be realized in pratice.
 
 .. toctree::
 
+   usage/configuration
    usage/views
    usage/forms
    usage/templates

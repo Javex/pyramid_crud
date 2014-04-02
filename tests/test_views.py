@@ -19,6 +19,7 @@ def route_setup(config):
     config.add_route(basename + "edit", '/test/{id}')
     config.add_route(basename + "delete", '/test/delete/{id}')
     config.add_route(basename + "new", '/test/new')
+    config.commit()
 
 
 @pytest.fixture

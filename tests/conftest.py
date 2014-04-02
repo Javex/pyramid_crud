@@ -54,11 +54,12 @@ def session(pyramid_request):
     return session
 
 
-@pytest.fixture
+@pytest.yield_fixture
 def config(pyramid_request, request):
-    cfg = testing.setUp(request=pyramid_request)
-    request.addfinalizer(testing.tearDown)
-    return cfg
+    cfg = testing.setUp(request=pyramid_request, autocommit=False)
+    yield cfg
+    cfg.commit()
+    testing.tearDown()
 
 
 @pytest.fixture
