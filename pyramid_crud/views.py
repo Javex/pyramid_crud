@@ -36,7 +36,7 @@ class CRUDCreator(type):
             config.add_view(cls, attr='edit', route_name=cls.route_name('new'),
                             renderer=cls._template_for('edit'))
             pks = ",".join('{%s}' % pk_name
-                           for pk_name in get_pks(cls.form.Meta.model))
+                           for pk_name in get_pks(cls.Form.Meta.model))
             config.add_route(cls.route_name('edit'),
                              '%s/%s' % (cls.url_path, pks))
             config.add_view(cls, attr='edit',
@@ -44,7 +44,7 @@ class CRUDCreator(type):
                             renderer=cls._template_for('edit'))
 
             config.add_route(cls.route_name('delete'),
-                             '%s/delete/%s' % (cls.url_path, pks))
+                             '%s/%s/delete' % (cls.url_path, pks))
             config.add_view(cls, attr='delete',
                             route_name=cls.route_name('delete'),
                             request_method='POST')

@@ -4,10 +4,12 @@ from pyramid_crud import forms
 from sqlalchemy import Column, String
 from webob.multidict import MultiDict
 try:
-    from unittest.mock import MagicMock
+    from unittest.mock import MagicMock, patch
 except ImportError:
-    from mock import MagicMock
+    from mock import MagicMock, patch
 import pytest
+
+# TODO: Test with multiple PK
 
 
 @pytest.fixture
@@ -19,7 +21,6 @@ def route_setup(config):
     config.add_route(basename + "new", '/test/new')
 
 
-#@pytest.mark.usefixtures("config")
 @pytest.fixture
 def csrf_token(session, pyramid_request):
     session.get_csrf_token.return_value = 'ABCD'
@@ -130,6 +131,14 @@ class TestNormalViewDefaults(object):
     def test__get_request_pks_empty(self):
         assert self.view._get_request_pks() is None
 
+    def test__get_request_pks_half_empty(self):
+        self.request.matchdict['id'] = 4
+        with patch('pyramid_crud.views.get_pks') as mock:
+            mock.return_value = ['id', 'id2']
+            with pytest.raises(ValueError):
+                self.view._get_request_pks()
+            assert mock.call_count == 1
+
     def test_list_empty(self):
         data = self.view.list()
         assert len(data) == 1
@@ -219,7 +228,7 @@ class TestNormalViewDefaults(object):
         """
         Runs an edit with a given action.
         """
-        def run(action, test_text='testval', is_successful=True):
+        def run(action, test_text='testval', expect_redirect=True):
             self.request.method = 'POST'
             if request.param == 'edit':
                 self.request.matchdict['id'] = obj.id
@@ -228,7 +237,7 @@ class TestNormalViewDefaults(object):
             # either redirect or retparams
             retval = self.view.edit()
             flash = self.request.session.flash
-            if is_successful:
+            if expect_redirect:
                 assert flash.call_count == 1
                 args, kw = flash.call_args
                 assert len(args) == 1
@@ -271,11 +280,88 @@ class TestNormalViewDefaults(object):
         with pytest.raises(ValueError):
             edit_run_factory('invalid_action')
 
-    def test_edit_invalid_form(self, edit_run_factory, request):
+    def test_edit_invalid_form(self, edit_run_factory):
         del self.request.POST['csrf_token']
-        params, is_new = edit_run_factory('save', is_successful=False)
+        params, is_new = edit_run_factory('save', expect_redirect=False)
         assert len(params) == 2
         assert params['is_new'] is is_new
         form = params['form']
         assert len(form.errors) == 1
         assert form.csrf_token.errors
+
+    def test_edit_add_item(self, edit_run_factory):
+        params, is_new = edit_run_factory('add_foo', expect_redirect=False)
+        assert len(params) == 2
+        assert params['is_new'] is is_new
+        form = params['form']
+        assert len(form.errors) == 0
+        assert self.request.session.flash.call_count == 0
+
+
+class TestCrudCreator(object):
+
+    @pytest.fixture(autouse=True)
+    def _prepare_view(self, pyramid_request, DBSession, form_factory,
+                      model_factory):
+        self.Model = model_factory([Column('test_text', String)])
+        self.Form = form_factory(model=self.Model, base=forms.CSRFModelForm)
+
+        def make_view(**kwargs):
+            return type('MyView', (CRUDView,), kwargs)
+        self.make_view = make_view
+
+    def test_okay_config(self):
+        View = self.make_view(Form=self.Form, url_path='/test')
+        assert View.Form is self.Form
+        assert View.url_path == "/test"
+        assert hasattr(View, '__venusian_callbacks__')
+
+    def test_missing_form(self):
+        with pytest.raises(AttributeError):
+            self.make_view(url_path='/test')
+
+    def test_missing_url_path(self):
+        with pytest.raises(AttributeError):
+            self.make_view(Form=self.Form)
+
+    def test_missing_all(self):
+        with pytest.raises(AttributeError):
+            self.make_view()
+
+    def test_abstract(self):
+        View = self.make_view(__abstract__=True)
+        assert not hasattr(View, '__venusian_callbacks__')
+
+    def test_route_setup(self):
+        View = self.make_view(Form=self.Form, url_path='/test')
+        cb = View.__venusian_callbacks__.values()[0][0][0]
+        context = MagicMock()
+        cb(context, None, None)
+        config = context.config.with_package()
+        routes = [('tests.test_views.MyView.list', '/test'),
+                  ('tests.test_views.MyView.new', '/test/new'),
+                  ('tests.test_views.MyView.edit', '/test/{id}'),
+                  ('tests.test_views.MyView.delete', '/test/{id}/delete')]
+        views = [((View,),
+                  {'attr': 'list',
+                   'route_name': 'tests.test_views.MyView.list',
+                   'renderer': 'default/list.mako',
+                   'request_method': 'GET'}),
+                 ((View,),
+                  {'attr': 'edit',
+                   'route_name': 'tests.test_views.MyView.edit',
+                   'renderer': 'default/edit.mako'}),
+                 ((View,),
+                  {'attr': 'edit',
+                   'route_name': 'tests.test_views.MyView.new',
+                   'renderer': 'default/edit.mako'}),
+                 ((View,),
+                  {'attr': 'delete',
+                   'route_name': 'tests.test_views.MyView.delete',
+                   'request_method': 'POST'}),
+                 ]
+        assert config.add_route.call_count == 4
+        assert config.add_view.call_count == 4
+        for route, view in zip(routes, views):
+            assert (route, {}) in config.add_route.call_args_list
+            assert view in config.add_view.call_args_list
