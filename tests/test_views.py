@@ -146,6 +146,11 @@ class TestCRUDView(object):
         assert cols == [{'label': 'Test Text',
                          'css_class': 'column-test_text'}]
 
+    def test_iter_head_cols_wrong_attr(self):
+        self.View.list_display = ('doesnotexist',)
+        with pytest.raises(AttributeError):
+            list(self.view.iter_head_cols())
+
     def test_iter_list_cols_default(self, obj):
         cols = list(self.view.iter_list_cols(obj))
         assert cols == ['ModelStr']
