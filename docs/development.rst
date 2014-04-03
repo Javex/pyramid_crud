@@ -21,29 +21,45 @@ Then you can build the documentation:
 Running Tests
 -------------
 
-Running tests is easily done:
+Before you can run tests, you need to install the requirements. These consist
+of the requirements to create docs (for doctests) and pytest:
+
+.. code-block:: text
+
+    pip install -r docs_require.txt
+    pip install pytest mock
+
+.. note::
+    Note mock is an unnecessary requirement for users of python 3.3 and above.
+
+Now you can run your tests with:
 
 .. code-block:: text
 
     python setup.py test
 
-If you want more control over tests and develop your own, it is recommended to
-install `py.test`_:
-
-.. _py.test: http://pytest.org/latest/
-
-.. code-block:: text
-
-    pip install pytest
-
-Then you can execute tests with:
+If you need more control over which tests are executed, you can also execute
+pytest and doctest directly:
 
 .. code-block:: text
 
     py.test tests/
+    make -C docs/ doctest
 
-Now you can control the tests being executed and provide additional options
-using the usual py.test command line.
+.. note::
+
+    Our tests are also run against templates. However, as they are not python
+    files, the test suite automatically compiles them into a temporary
+    directory. This directory should never be checked into GitHub and also be
+    removed before installing the library (it does not hurt, it just pollutes
+    the directory).
+
+    Running tests against templates also is included in coverage (the reason
+    why we need an accessible template module directory). The coverage values
+    are reported by Travis CI to coveralls. However, since the code for this is
+    not on GitHub, you cannot see which lines were missted online. Instead, you
+    need to run those tests locally and get coverage output with ``coverage
+    html`` after you have run the tests.
 
 Contributing
 ------------

@@ -25,7 +25,7 @@ requires = [
 ]
 
 extras_require = {
-    'test': ['pytest'],
+    'test': ['pytest', 'sphinx', 'sphinx_rtd_theme'],
 }
 
 # Below Python 2.7
@@ -49,8 +49,12 @@ class PyTest(Command):
 
     def run(self):
         import subprocess
-        errno = subprocess.call(['py.test', 'tests'])
-        raise SystemExit(errno)
+        errno = subprocess.call(['coverage', 'run', '-m', 'py.test', 'tests'])
+        errno2 = subprocess.call(['make', '-C', 'docs/', 'doctest'])
+        if errno:
+            raise SystemExit(errno)
+        else:
+            raise SystemExit(errno2)
 
 setup(name='pyramid_crud',
       version=VERSION,
