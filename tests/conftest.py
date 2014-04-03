@@ -7,7 +7,7 @@ import pytest
 import inspect
 from pyramid import testing
 from pyramid.asset import abspath_from_asset_spec
-import mako
+from mako.lookup import TemplateLookup
 from tests import all_forms, normal_forms, inline_forms
 try:
     from collections import OrderedDict
@@ -36,8 +36,8 @@ def venusian_init(config):
 def compiled_templates():
     template_dir = abspath_from_asset_spec('pyramid_crud:templates')
     module_dir = abspath_from_asset_spec('pyramid_crud:_template_cache')
-    l = mako.lookup.TemplateLookup(directories=[template_dir],
-                                   module_directory=module_dir)
+    l = TemplateLookup(directories=[template_dir],
+                       module_directory=module_dir)
     templates = set()
     for dirpath, _, filenames in os.walk(template_dir):
         for filename in filenames:
