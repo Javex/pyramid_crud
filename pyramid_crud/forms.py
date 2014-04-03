@@ -68,11 +68,6 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
         """
         return [field.name for field in cls()]
 
-    @meta_property
-    def fieldsets(cls):
-        """See inline documentation for ModelForm"""
-        return [(None, {'fields': cls.field_names})]
-
 
 @six.add_metaclass(_CoreModelMeta)
 class _CoreModelForm(wtforms_alchemy.ModelForm):
@@ -96,6 +91,13 @@ class _CoreModelForm(wtforms_alchemy.ModelForm):
             raise AttributeError("No object attached")
         return [(pk, getattr(self.obj, pk, None))
                 for pk in get_pks(self.Meta.model)]
+
+    @property
+    def fieldsets(self):
+        """See inline documentation for ModelForm"""
+        default_fields = [field.name for field in self
+                          if field.name != 'csrf_token']
+        return [{'title': '', 'fields': default_fields}]
 
 
 class CSRFForm(SecureForm):

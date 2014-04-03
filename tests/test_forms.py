@@ -643,21 +643,32 @@ class TestAnyModelForm(object):
     def test_fieldsets(self, model_factory, form_factory, any_form):
         Model = model_factory([Column('val', Integer)])
         Form = form_factory(base=any_form, model=Model)
-        fieldsets = [(None, {'fields': ['val']})]
-        assert Form.fieldsets == fieldsets
+        form = Form()
+        fieldsets = [{'title': '', 'fields': ['val']}]
+        assert form.fieldsets == fieldsets
 
     def test_fieldsets_empty(self, model_factory, form_factory, any_form):
         Model = model_factory()
         Form = form_factory(base=any_form, model=Model)
-        fieldsets = [(None, {'fields': []})]
-        assert Form.fieldsets == fieldsets
+        form = Form()
+        fieldsets = [{'title': '', 'fields': []}]
+        assert form.fieldsets == fieldsets
 
     def test_fieldsets_override(self, model_factory, form_factory, any_form):
-        fieldsets = [('Test', {'fields': ['test', 'foo']})]
+        fieldsets = [{'title': 'Test', 'fields': ['test', 'foo']}]
         Model = model_factory()
         Form = form_factory(base=any_form, model=Model,
                             fields={'fieldsets': fieldsets})
-        assert Form.fieldsets == fieldsets
+        form = Form()
+        assert form.fieldsets == fieldsets
+
+    def test_fieldsets_no_csrf_token(self, model_factory, form_factory,
+                                     any_form):
+        Model = model_factory([Column('csrf_token', Integer)])
+        Form = form_factory(base=any_form, model=Model)
+        form = Form()
+        fieldsets = [{'title': '', 'fields': []}]
+        assert form.fieldsets == fieldsets
 
     def test_primary_keys(self, model_factory, form_factory, any_form,
                           DBSession):

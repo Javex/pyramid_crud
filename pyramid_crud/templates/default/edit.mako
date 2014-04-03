@@ -1,8 +1,8 @@
 <%inherit file="base.mako" />
 <h1>${'New' if is_new else 'Edit'} ${view.title}</h1>
 <form method="POST" class="crud-edit">
-    % for title, fieldset_info in form.fieldsets:
-        <%include file="fieldset.mako" args="title=title, fieldset_info=fieldset_info" />
+	% for fieldset in form.fieldsets:
+		<%include file="fieldset.mako" args="fieldset=fieldset" />
     % endfor
     % for inline, items in form.inline_fieldsets.values():
         <%include file="edit_inline/tabular.mako" args="inline=inline, items=items" />

@@ -29,8 +29,10 @@
                                     ${col}
                                 </a>
                             % else:
-                                % if col is True or col is False:
-                                    ${'Yes' if col else 'No'}
+                                % if col is True:
+                                    Yes
+                                % elif col is False:
+                                    No
                                 % else:
                                     ${col}
                                 % endif

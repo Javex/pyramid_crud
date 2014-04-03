@@ -1,9 +1,9 @@
-<%page args="title, fieldset_info"/>
+<%page args="fieldset"/>
 <fieldset>
-    % if title:
-        <legend>${title}</legend>
+	% if fieldset["title"]:
+		<legend>${fieldset["title"]}</legend>
     % endif
-    % for field in map(lambda f: getattr(form, f), fieldset_info['fields']):
+    % for field in map(lambda f: getattr(form, f), fieldset['fields']):
         % if field.widget.input_type == 'hidden':
             ${field()}
         % else:
