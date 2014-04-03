@@ -5,7 +5,7 @@ python:
     - "3.3"
 install:
     - python setup.py install
-    - pip install coveralls sphinx
+    - pip install coveralls sphinx sphinx_rtd_theme
 script:
     - coverage run -m py.test tests
     - make -C docs/ doctest
