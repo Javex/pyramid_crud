@@ -43,25 +43,17 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
 
     @meta_property
     def title(cls):
-        """
-        The title. By default this returns the class name of the model. It is
-        used in different places such as the title of the page.
-        """
+        """See inline documentation for ModelForm"""
         return inspect(cls.Meta.model).class_.__name__
 
     @meta_property
     def title_plural(cls):
-        """
-        The plural title. By default it is the title with an "s" appended.
-        """
+        """See inline documentation for ModelForm"""
         return cls.title + "s"
 
     @meta_property
     def name(cls):
-        """
-        The name of this form. By default it uses the lowercase model class
-        name.
-        """
+        """See inline documentation for ModelForm"""
         return inspect(cls.Meta.model).class_.__name__.lower()
 
     @meta_property
@@ -78,6 +70,7 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
 
     @meta_property
     def fieldsets(cls):
+        """See inline documentation for ModelForm"""
         return [(None, {'fields': cls.field_names})]
 
 
@@ -141,6 +134,58 @@ class CSRFForm(SecureForm):
 class ModelForm(_CoreModelForm):
     """
     Base-class for all regular forms.
+
+    The following configuration options are available on this form in addition
+    to the full behavior described for `WTForms-Alchemy`_
+
+    .. _WTForms-Alchemy: https://wtforms-alchemy.readthedocs.org
+
+    .. note::
+
+        While this class can easily be the base for each form you want to
+        configure, it is strongly recommended to use the :class:`CSRFModelForm`
+        instead. It is almost no different than this form except for a new
+        ``csrf_token`` field. Thus it should never hurt to subclass it instead
+        of this form.
+
+    Meta
+        This is the only mandatory argument. It is directly taken over from
+        `WTForms-Alchemy`_ so you should check out their documentation on this
+        class as it will provide you with a complete overview of what's
+        possible here.
+
+    .. _inlines:
+
+    inlines
+        A list of forms to use as inline forms. See :ref:`inline_forms`.
+
+    .. _fieldsets:
+
+    fieldsets
+        Optionally define fieldsets to group your form into categories. It
+        requires a list of dictionaries and in each dictionary, the following
+        attributes can/must be set:
+
+        * ``title``: A title to use for the fieldset. This is required but may
+          be the empty string (then no title is displayed).
+
+        * ``fields``: A list of field names that should be displayed together
+          in a fieldset. This is required.
+
+    title
+        Set the title of your form. By default this returns the class name of
+        the model. It is used in different places such as the title of the
+        page.
+
+    title_plural:
+        The plural title. By default it is the title with an "s" appended,
+        however, you somtimes might want to override it because "Childs" just
+        looks stupid ;-)
+
+    name:
+        The name of this form. By default it uses the lowercase model class
+        name. This is used internally und you normally do not need to change
+        it.
     """
     inlines = []
 
@@ -326,7 +371,38 @@ class ModelForm(_CoreModelForm):
 @six.add_metaclass(_CoreModelMeta)
 class BaseInLine(_CoreModelForm):
     """
-    Base-class for all inline forms.
+    Base-class for all inline forms. You normally don't subclass from this
+    directly unless you want to create a new inline type. However, all
+    inline types share the attributes inherited by this template.
+
+    Inline forms are forms that are not intended to be displayed by themselves
+    but instead are added to the :ref:`inlines <inlines>` attribute of a normal
+    form. They will then be displayed inside the normal form while editing,
+    allowing for multiple instance to be added, deleted or modified at the same
+    time. They are heavily inspired by Django's inline forms.
+
+    An inline form is configurable with the following attributes, additionally
+    to any attribute provided by `WTForms-Alchemy`_
+
+    .. _WTForms-Alchemy: https://wtforms-alchemy.readthedocs.org
+
+    Meta
+        This is the standard `WTForms-Alchemy` attribute to configure the
+        model. Check out their documentation for specific details.
+
+    relationship_name
+        The name of the relationship to inline. Determined automatically,
+        unless there are multiple relationships between the models in which
+        case this must be overridden by the subclass.
+
+    extra
+        How many empty fields to display in which new objects can be added. Pay
+        attention that often fields require intputs and thus extra field may
+        often not be left empty. This is an intentional restriction to allow
+        client-side validation without javascript. So only specify this if you
+        are sure that items will always be added (note, however, that the extra
+        attribute is not used to enforce a minimum number of members in the
+        database). Defaults to ``0``.
     """
     extra = 0
     relationship_name = None
@@ -377,10 +453,16 @@ class CSRFModelForm(ModelForm, CSRFForm):
     """
     A form that adds a CSRF token to the form. Derive from this class for
     security critical operations (read: you want it most of the time and it
-    doesn't hurt.
+    doesn't hurt).
 
     Do not derive from this for inline stuff and other composite forms: Only
     the main form should use this as you only need one token per request.
+
+    All configuration is done exactly in the same way as with the
+    :class:`.ModelForm` except for one difference: An additional
+    ``csrf_context`` argument is required. The pre-configured views and
+    templates already know how to utilize this field and work fine with
+    and without it.
     """
     # Developer Note: This form works through multiple inheritance. But the
     # CSRFForm is not a typical mixin, it derives from the Form class whereas

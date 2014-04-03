@@ -1,6 +1,3 @@
-pyramid_crud - CRUD pages for Pyramid
-=====================================
-
 .. include:: ../README.rst
 
 Table of Contents

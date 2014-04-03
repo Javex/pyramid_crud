@@ -6,6 +6,7 @@ from functools import partial
 from .util import get_pks
 from .forms import ButtonForm
 from sqlalchemy import inspect
+import sqlalchemy
 try:
     from collections import OrderedDict
 except ImportError:  # pragma: no cover
@@ -69,47 +70,159 @@ class CRUDView(object):
 
     The following attributes can be defined to override behavior of the view:
 
-    ``Form``: Mandatory argument that specifies the form class for which this
-    view should be created. This must be a form as described in :ref:`forms`.
+    .. _crud_Form:
 
-    ``url_path``: Mandatory argument for defining the base path under which
-    this view should be available.
+    ``Form``
+        Mandatory argument that specifies the form class for which this
+        view should be created. This must be a form as described in
+        :ref:`forms`.
 
-    ``dbsession``: Return the current SQLAlchemy session. By default this
-    expects a ``dbsession`` attribute on the ``request`` object. It is
-    **mandatory** that you either attach the attribute using an event
-    or override this attribute (you can use a :class:`property` if you
-    like).
+    ``url_path``
+        Mandatory argument for defining the base path under which
+        this view should be available.
 
-    ``title``: The title of the view. By default it uses the name of the model
-    class.
+    ``dbsession``
+        Return the current SQLAlchemy session. By default this
+        expects a ``dbsession`` attribute on the ``request`` object. It is
+        **mandatory** that you either attach the attribute using an event
+        or override this attribute (you can use a :class:`property` if you
+        like).
 
-    ``title_plural``: The title when used in plural. By default this attached
-    an "s" to the ``title``.
+    .. _list_display:
 
-    ``template_dir``: The directory where to find templates. The default
-    templates are provided in the ``default`` folder.
+    ``list_display``
+        A tuple if items which should be displayed on the list
+        view. By default a single column of the models ``__str__`` method is
+        used. There are several possibilities of what you might specify here
+        (the options will be tried in this order):
 
-    ``template_ext``: Which file extension to use for templates. By default,
-    Mako templates are used and so the extension is ``.mako`` but any
-    rendered that is recognized by pramid can be used.
+        * A string representing an attribute or callable on the model. If this
+          attribute is callable, it will be called and get no additional
+          arguments (the first argument will already be ``self``, the model
+          instance).
 
-    ``template_base_name``: The name of the base template, i.e. from which all
-    templates should inherit. Using this you can override the general style
-    of the page using a single template instead of having to copy all of
-    them and editing them one-by-one. It defaults to ``base``.
+          For example, with a normal field on the model:
 
-    ``button_form``: The form which to use for button actions that should be
-    protected by CSRF. Normally, this does not need to be overridden,
-    except if a change in those button-only forms such as the delete button
-    in the list view is desired. Contrary to a Link this is a necessity to
-    prevent CSRF attacks.
+          .. testcode::
 
-    ``delete_form_factory``: A callable which creates a delete form suitable
-    for being displayed as a button to delete an item. By default this is
-    based on the ``button_form`` attribute and additionally to all
-    typical arguments being accepted, it sets the button value to
-    ``Delete``.
+             class Model(Base):
+                  id = Column(Integer, primary_key=True,
+                              info={'label': 'ID'})
+
+             class View(CRUDView):
+                  list_display = ('id',)
+
+          In this example there will be a single column in the list view. Its
+          title will be "ID" and its value will be the value of the ``id``
+          field in the database.
+
+          Similarly, with a callable:
+
+          .. testcode::
+
+              class Model(Base):
+                  id = Column(Integer, primary_key=True)
+
+                  def id_plus_one(self):
+                      return self.id + 1
+                  id_plus_one.info = {'label': 'ID+1'}
+
+              class View(CRUDView):
+                  list_display = ('id_plus_one',)
+
+        * A generic callable function. This function will be called with a
+          single argument: The instance of the model. For example:
+
+          .. testcode::
+
+              class Model(Base):
+                  id = Column(Integer, primary_key=True)
+
+              def id_plus_one(obj):
+                  return obj.id + 1
+              id_plus_one.info  = {'label': 'ID+1'}
+
+              class View(CRUDView):
+                  list_display = (id_plus_one,)
+
+        * A string representing a method on the view. This will behave in the
+          same way as for the function callable above except that it must be
+          a string. For example:
+
+          .. testcode::
+
+              class Model(Base):
+                  id = Column(Integer, primary_key=True)
+
+              class View(CRUDView):
+                  list_display = ('id_plus_one',)
+
+                  def id_plus_one(self, obj):
+                      return obj.id + 1
+                  id_plus_one.info = {'label': 'ID+1'}
+
+        Some additional notes on the way this attribute behaves:
+
+        * Some additional configuration is possible on each attribute,
+          regardless of how it is specified. For information on this see
+          :ref:`info_dict`.
+
+        * A class ``columnn-<attr-name>`` is placed on each on each of the
+          <th> fields in the column heading to allow application of CSS
+          attributes, e.g. to set the width of a column.
+
+        * If the attribute ``info`` cannot be found on the attribute (at the
+          class level, not instance level), default value is determined as the
+          column heading. If name of the column is ``__str__`` then the name
+          of the model class is fetched. If it is directly callable (in case
+          of a generic callable function), then the name of the function is
+          used. In all other cases the provided string is used. To make for
+          a prettier format, it additionally replaces any underscores by
+          spaces and captializes each word.
+
+    ``title``
+        The title of the view. By default it uses the name of the model
+        class.
+
+    ``title_plural``
+        The title when used in plural. By default this attached
+        an "s" to the ``title``.
+
+    ``template_dir``
+        The directory where to find templates. The default
+        templates are provided in the ``default`` folder.
+
+    ``template_ext``
+        Which file extension to use for templates. By default,
+        Mako templates are used and so the extension is ``.mako`` but any
+        rendered that is recognized by pramid can be used.
+
+    ``template_base_name``
+        The name of the base template, i.e. from which all
+        templates should inherit. Using this you can override the general style
+        of the page using a single template instead of having to copy all of
+        them and editing them one-by-one. It defaults to ``base``.
+
+    ``button_form``
+        The form which to use for button actions that should be
+        protected by CSRF. Normally, this does not need to be overridden,
+        except if a change in those button-only forms such as the delete button
+        in the list view is desired. Contrary to a Link this is a necessity to
+        prevent CSRF attacks.
+
+    ``delete_form_factory``
+        A callable which creates a delete form suitable
+        for being displayed as a button to delete an item. By default this is
+        based on the ``button_form`` attribute and additionally to all
+        typical arguments being accepted, it sets the button value to
+        ``Delete``.
+
+    .. _fieldsets:
+
+    ``fieldsets``
+        .. todo::
+
+            Document
     """
     __abstract__ = True
     template_dir = 'default'
@@ -147,6 +260,10 @@ class CRUDView(object):
     def title_plural(self):
         return self.title + "s"
 
+    @property
+    def list_display(self):
+        return ('__str__',)
+
     # Misc helper stuff
 
     @classmethod
@@ -159,6 +276,32 @@ class CRUDView(object):
         """
         default_name = '%s/%s%s' % (cls.template_dir, action, cls.template_ext)
         return getattr(cls, '%s_template' % action, default_name)
+
+    def _get_request_pks(self):
+        """
+        Get an ordered dictionary of primary key names matching to their value,
+        fetched from the request's matchdict (not the model!).
+
+        :param names: An iterable of names which are to be fetched from the
+            matchdict.
+
+        :return: An :class:`.OrderedDict` of the given ``names`` as keys with
+            their corresponding value.
+
+        :raises ValueError: When only some primary keys are set (it is allowed
+            to have all or none of them set)
+        """
+        data = OrderedDict((key, self.request.matchdict.get(key, None))
+                           for key in get_pks(self.Form.Meta.model))
+        nones = [val is None for val in data.values()]
+        if any(nones):
+            if not all(nones):
+                raise ValueError("Either all primary keys have to be set or "
+                                 "None")
+            else:
+                return None
+        else:
+            return data
 
     # Routing stuff
 
@@ -235,31 +378,62 @@ class CRUDView(object):
         kw = self._get_route_pks(obj)
         return self.request.route_url(self.route_name('delete'), **kw)
 
-    def _get_request_pks(self):
+    # Template helper functions
+
+    def iter_head_cols(self):
         """
-        Get an ordered dictionary of primary key names matching to their value,
-        fetched from the request's matchdict (not the model!).
-
-        :param names: An iterable of names which are to be fetched from the
-            matchdict.
-
-        :return: An :class:`.OrderedDict` of the given ``names`` as keys with
-            their corresponding value.
-
-        :raises ValueError: When only some primary keys are set (it is allowed
-            to have all or none of them set)
+        Get an iterable of column headings based on the configuration in
+        ``list_display``.
         """
-        data = OrderedDict((key, self.request.matchdict.get(key, None))
-                           for key in get_pks(self.Form.Meta.model))
-        nones = [val is None for val in data.values()]
-        if any(nones):
-            if not all(nones):
-                raise ValueError("Either all primary keys have to be set or "
-                                 "None")
+        for col in self.list_display:
+            col_name = col
+            if callable(col_name):
+                col_name = col_name.__name__
+            model = self.Form.Meta.model
+            if isinstance(col, (six.text_type, six.binary_type)):
+                if hasattr(model, col):
+                    col = getattr(model, col)
+                elif hasattr(self, col):
+                    col = getattr(self, col)
+                else:
+                    raise AttributeError("No attribute of name '%s' on model "
+                                         "or view found")
+            # Create a copy
+            if hasattr(col, 'info'):
+                col_info = dict(col.info)
             else:
-                return None
-        else:
-            return data
+                if col_name == '__str__':
+                    label = model.__name__
+                    col_name = label
+                else:
+                    label = col_name
+                label = label.replace("_", " ").title()
+                col_info = {'label': label}
+            if (hasattr(col, 'type') and
+                    isinstance(col.type, sqlalchemy.Boolean)):
+                col_info["bool"] = True
+            col_info.setdefault("css_class", "column-%s" % col_name)
+            yield col_info
+
+    def iter_list_cols(self, obj):
+        """
+        Get an iterable of columns for a given obj suitable as the columns for
+        a single row in the list view. It uses the ``list_display`` option to
+        determine the columns.
+        """
+        for col in self.list_display:
+            if isinstance(col, (six.text_type, six.binary_type)):
+                if hasattr(obj, col):
+                    col = getattr(obj, col)
+                    if callable(col):
+                        col = col()
+                elif hasattr(self, col):
+                    col = getattr(self, col)
+                    if callable(col):
+                        col = col(obj)
+            elif callable(col):
+                col = col(obj)
+            yield col
 
     # Actual admin views
 

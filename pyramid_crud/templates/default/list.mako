@@ -3,20 +3,13 @@
     import sqlalchemy as sa
 %>
 <h1>${view.title_plural}</h1>
-% if request.session.peek_flash():
-    <ul>
-        % for msg in request.session.pop_flash():
-            <li>${msg}</li>
-        % endfor
-    </ul>
-% endif
 <a href="${request.route_url(view.route_name('new'))}" class="btn btn-primary pull-right">New</a>
 <table class="table">
     <thead>
         <tr>
-            % for col in [getattr(view.form.Meta.model, c) for c in view.list_display]:
-                <th class="${'text-center' if isinstance(col.type, sa.types.Boolean) else ''}">
-                    ${col.info["label"]}
+            % for col_info in view.iter_head_cols():
+                <th class="${col_info["css_class"]}">
+                    ${col_info["label"]}
                 </th>
             % endfor
             <th>Delete</th>
@@ -25,7 +18,7 @@
     <tbody>
             % for item in items:
                 <tr>
-                    % for col in [getattr(item, c) for c in view.list_display]:
+                    % for col in view.iter_list_cols(item):
                         % if col is True or col is False:
                             <td class="text-${'success' if col else 'danger'} text-center">
                         % else:

@@ -1,7 +1,8 @@
 from pyramid.httpexceptions import HTTPFound
 from pyramid_crud.views import CRUDView
 from pyramid_crud import forms
-from sqlalchemy import Column, String
+from sqlalchemy import Column, String, Integer, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
 from webob.multidict import MultiDict
 try:
     from unittest.mock import MagicMock, patch
@@ -29,14 +30,19 @@ def csrf_token(session, pyramid_request):
     pyramid_request.POST['csrf_token'] = token
 
 
-class TestNormalViewDefaults(object):
+class TestCRUDView(object):
 
     @pytest.fixture(autouse=True)
     def _prepare_view(self, pyramid_request, DBSession, form_factory,
                       model_factory):
         self.request = pyramid_request
         self.request.POST = MultiDict(self.request.POST)
-        self.Model = model_factory([Column('test_text', String)])
+        self.Model = model_factory([Column('test_text', String),
+                                    Column('test_bool', Boolean)])
+        self.Model.test_text.info["label"] = "Test Text"
+        self.Model.test_bool.info["label"] = "Test Bool"
+        self.Model.id.info["label"] = "ID"
+        self.Model.__str__ = lambda self: 'ModelStr'
         self.Form = form_factory(model=self.Model, base=forms.CSRFModelForm)
         self.request.dbsession = DBSession
         self.session = DBSession
@@ -49,17 +55,128 @@ class TestNormalViewDefaults(object):
 
     @pytest.fixture
     def obj(self):
-        obj = self.Model(test_text='test')
+        obj = self.Model(test_text='test', test_bool=True)
         self.session.add(obj)
         self.session.flush()
         assert obj.id
         return obj
+
+    @pytest.fixture
+    def ChildForm(self, model_factory, form_factory):
+        cols = [Column('id', Integer, primary_key=True),
+                Column('parent_id', ForeignKey('model.id')),
+                ]
+        rels = {'parent': relationship(self.Model, backref='children')}
+        ChildModel = model_factory(cols, 'Child', relationships=rels)
+        ChildForm = form_factory(model=ChildModel, base=forms.CSRFModelForm)
+        return ChildForm
 
     def test_title(self):
         assert self.view.title == "Model"
 
     def test_title_plural(self):
         assert self.view.title_plural == "Models"
+
+    def test_list_display(self):
+        [default] = self.view.list_display
+        assert default == '__str__'
+
+    def test_iter_head_cols_default(self):
+        [col] = list(self.view.iter_head_cols())
+        assert col == {'label': 'Model', 'css_class': 'column-Model'}
+
+    def test_iter_head_cols_model_attr(self):
+        self.View.list_display = ('id', 'test_text', 'test_bool')
+        cols = list(self.view.iter_head_cols())
+        assert cols == [{'label': 'ID', 'css_class': 'column-id'},
+                        {'label': 'Test Text',
+                         'css_class': 'column-test_text'},
+                        {'label': 'Test Bool', 'css_class': 'column-test_bool',
+                         'bool': True}]
+
+    def test_iter_head_cols_model_callable(self):
+        def meth(self):
+            pass
+        meth.info = {'label': 'Test Text Lower'}
+        self.Model.test_text_lower = meth
+        self.View.list_display = ('test_text_lower',)
+        cols = list(self.view.iter_head_cols())
+        assert cols == [{'label': 'Test Text Lower',
+                         'css_class': 'column-test_text_lower'}]
+
+    def test_iter_head_cols_generic_callable(self):
+        def meth(obj):
+            pass
+        meth.info = {'label': 'Test Foo'}
+        self.View.meth = meth
+        self.View.list_display = (meth,)
+        cols = list(self.view.iter_head_cols())
+        assert cols == [{'label': 'Test Foo', 'css_class': 'column-meth'}]
+
+    def test_iter_head_cols_view_callable(self):
+        def foo(self, obj):
+            pass
+        foo.info = {'label': 'Foo'}
+        self.View.foo = foo
+        self.View.list_display = ('foo',)
+        cols = list(self.view.iter_head_cols())
+        assert cols == [{'label': 'Foo', 'css_class': 'column-foo'}]
+
+    def test_iter_head_cols_custom_class(self):
+        def foo(self, obj):
+            pass
+        foo.info = {'label': 'Foo', 'css_class': 'foofoo'}
+        self.View.foo = foo
+        self.View.list_display = ('foo',)
+        cols = list(self.view.iter_head_cols())
+        assert cols == [{'label': 'Foo', 'css_class': 'foofoo'}]
+
+    def test_iter_head_cols_missing_info_callable(self):
+        def foo_test(self, obj):
+            pass
+        self.View.foo = foo_test
+        self.View.list_display = (foo_test,)
+        cols = list(self.view.iter_head_cols())
+        assert cols == [{'label': 'Foo Test', 'css_class': 'column-foo_test'}]
+
+    def test_iter_head_cols_missing_info_attr(self):
+        delattr(self.Model.test_text, 'info')
+        self.View.list_display = ('test_text',)
+        cols = list(self.view.iter_head_cols())
+        assert cols == [{'label': 'Test Text',
+                         'css_class': 'column-test_text'}]
+
+    def test_iter_list_cols_default(self, obj):
+        cols = list(self.view.iter_list_cols(obj))
+        assert cols == ['ModelStr']
+
+    def test_iter_list_cols_model_attr(self, obj):
+        self.View.list_display = ('id', 'test_text', 'test_bool')
+        cols = list(self.view.iter_list_cols(obj))
+        assert cols == [1, 'test', True]
+
+    def test_iter_list_cols_model_callable(self, obj):
+        def meth(self):
+            return self.test_text.upper()
+        self.Model.test_text_upper = meth
+        self.View.list_display = ('test_text_upper',)
+        cols = list(self.view.iter_list_cols(obj))
+        assert cols == ['TEST']
+
+    def test_iter_list_cols_generic_callable(self, obj):
+        def meth(obj):
+            return obj.test_text.upper()
+        self.View.list_display = (meth,)
+        cols = list(self.view.iter_list_cols(obj))
+        assert cols == ['TEST']
+
+    def test_iter_list_cols_view_callable(self, obj):
+        def upper(self, obj):
+            return obj.test_text.upper()
+        self.View.upper = upper
+        self.View.list_display = ('upper',)
+        cols = list(self.view.iter_list_cols(obj))
+        assert cols == ['TEST']
 
     def test_template_dir(self):
         assert self.view.template_dir == 'default'

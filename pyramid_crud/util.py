@@ -76,6 +76,8 @@ class meta_property(object):
     """
     def __init__(self, fget):
         self.fget = fget
+        if hasattr(fget, '__doc__'):
+            self.__doc__ = fget.__doc__
 
     def __get__(self, obj, type_):
         if obj:

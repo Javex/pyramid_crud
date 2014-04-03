@@ -1,3 +1,4 @@
+import os
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy import (Column, Integer, Table, MetaData, ForeignKey,
                         create_engine)
@@ -5,6 +6,8 @@ from sqlalchemy.orm import mapper, relationship, Session
 import pytest
 import inspect
 from pyramid import testing
+from pyramid.asset import abspath_from_asset_spec
+import mako
 from tests import all_forms, normal_forms, inline_forms
 try:
     from collections import OrderedDict
@@ -14,6 +17,46 @@ try:
     from unittest.mock import MagicMock
 except ImportError:
     from mock import MagicMock
+
+
+@pytest.fixture
+def venusian_init(config):
+    context = MagicMock()
+    context.config.with_package.return_value = config
+
+    def run_cbs(obj):
+        for cb_list in obj.__venusian_callbacks__.values():
+            for cb, _ in cb_list:
+                cb(context, None, None)
+    run_cbs.context = context
+    return run_cbs
+
+
+@pytest.fixture(scope="session")
+def compiled_templates():
+    template_dir = abspath_from_asset_spec('pyramid_crud:templates')
+    module_dir = abspath_from_asset_spec('pyramid_crud:_template_cache')
+    l = mako.lookup.TemplateLookup(directories=[template_dir],
+                                   module_directory=module_dir)
+    templates = set()
+    for dirpath, _, filenames in os.walk(template_dir):
+        for filename in filenames:
+            if filename.endswith(".mako"):
+                abspath = os.path.join(dirpath, filename)
+                relpath = os.path.relpath(abspath, template_dir)
+                templates.add(relpath)
+    for template in templates:
+        l.get_template(template)
+
+
+@pytest.fixture
+def template_setup(config, compiled_templates):
+    template_dir = abspath_from_asset_spec('pyramid_crud:templates')
+    module_dir = abspath_from_asset_spec('pyramid_crud:_template_cache')
+    config.add_settings({'mako.directories': template_dir,
+                         'mako.module_directory': module_dir})
+    config.include("pyramid_mako")
+    config.commit()
 
 
 @pytest.fixture
@@ -58,6 +101,7 @@ def session(pyramid_request):
 def config(pyramid_request, request):
     cfg = testing.setUp(request=pyramid_request, autocommit=False)
     yield cfg
+    # Commit to make sure any errors are raised on delayed configuration
     cfg.commit()
     testing.tearDown()
 

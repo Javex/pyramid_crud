@@ -258,3 +258,23 @@ intersphinx_mapping = {'http://docs.python.org/': None,
                        'http://webob.readthedocs.org/en/latest/': None,
                        'http://docs.pylonsproject.org/projects/pyramid/en/latest/': None,
                       }
+
+
+doctest_global_setup = """
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
+from sqlalchemy import Column, Integer, String, ForeignKey, MetaData
+from pyramid_crud import views
+import uuid
+import six
+
+class _Base(object):
+    @declared_attr
+    def __tablename__(cls):
+        return uuid.uuid4()
+
+Base = declarative_base(cls=_Base)
+
+@six.add_metaclass(type)
+class CRUDView(object):
+    pass
+"""

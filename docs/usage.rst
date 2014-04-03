@@ -14,7 +14,9 @@ integrate your own style or you don't use Mako), you can visit the
 :ref:`templates` section to see how to change the default templates.
 
 There are also some :ref:`examples` that show possible applications. You can
-refer there to see how your goal can be realized in pratice.
+refer there to see how your goal can be realized in pratice. To change the
+global behavior of the library refer to :ref:`configuration`. This is
+useful if the default global application behavior does not suit you.
 
 .. toctree::
 
@@ -23,4 +25,5 @@ refer there to see how your goal can be realized in pratice.
    usage/forms
    usage/templates
    usage/util
+   usage/help
    usage/examples

@@ -1,5 +1,5 @@
-pyramid_crud
-============
+pyramid_crud - CRUD pages for Pyramid
+=====================================
 
 |BuildStatus| |CoverageStatus| |LatestVersion| |License|
 
