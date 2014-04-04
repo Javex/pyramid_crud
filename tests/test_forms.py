@@ -4,11 +4,12 @@ from wtforms.fields import StringField, IntegerField
 from sqlalchemy import Column, String, Integer, ForeignKey, inspect
 from sqlalchemy.orm import relationship
 try:
-    from unittest.mock import MagicMock
+    from unittest.mock import MagicMock, patch
 except ImportError:
-    from mock import MagicMock
+    from mock import MagicMock, patch
 from itertools import product
 import pytest
+import six
 
 
 @pytest.fixture
@@ -42,6 +43,42 @@ def get_obj_test_matrix():
     return test_matrix
 
 
+def test_doc_copy():
+    # Test regular behavior
+    class A(object):
+        "Test Parent"
+
+    @six.add_metaclass(forms._CoreModelMeta)
+    class B(A):
+        pass
+
+    assert B.__doc__ == "Test Parent"
+
+
+def test_doc_copy_no_override():
+    # Test what happens if the child already has a docstring
+    class A(object):
+        "Test Parent"
+
+    @six.add_metaclass(forms._CoreModelMeta)
+    class B(A):
+        "Test Child"
+
+    assert B.__doc__ == "Test Child"
+
+
+def test_doc_copy_none():
+    # Test what happens if noone has a docstring
+    class A(object):
+        pass
+
+    @six.add_metaclass(forms._CoreModelMeta)
+    class B(A):
+        pass
+
+    assert not B.__doc__
+
+
 # tests for all forms that inherit from the ModelForm
 class TestNormalModelForm(object):
 
@@ -55,6 +92,11 @@ class TestNormalModelForm(object):
         f = forms.ModelForm(formdata, obj)
         assert f.formdata is formdata
         assert f.obj is obj
+
+    def test_inline_id_change(self, form_factory, Model_one_pk):
+        Form1 = form_factory(base=self.base_form, model=Model_one_pk)
+        Form2 = form_factory(base=self.base_form, model=Model_one_pk)
+        assert Form1.inlines is not Form2.inlines
 
     def test__relationship_key(self, Model2_many_to_one, Model_one_pk,
                                form_factory):
@@ -90,18 +132,23 @@ class TestNormalModelForm(object):
         assert form()._relationship_key(OtherForm) == 'some_name'
 
     def test_process(self, formdata, generic_obj):
-        # TODO: Test that parent "process" is called, too.
         form = self.base_form()
-        form.process_inline = MagicMock()
-        form.process(formdata, generic_obj, test='Test23')
-        form.process_inline.assert_called_once_with(formdata, generic_obj,
-                                                    test='Test23')
+        with patch.object(self.base_form.__bases__[0], 'process') as mocked:
+            form.process_inline = MagicMock()
+            form.process(formdata, generic_obj, test='Test23')
+            form.process_inline.assert_called_once_with(formdata, generic_obj,
+                                                        test='Test23')
+            mocked.assert_called_once_with(formdata, generic_obj,
+                                           test='Test23')
 
     def test_populate_obj(self, generic_obj):
         form = self.base_form()
-        form.populate_obj_inline = MagicMock()
-        form.populate_obj(generic_obj)
-        form.populate_obj_inline.assert_called_once_with(generic_obj)
+        base = self.base_form.__bases__[0]
+        with patch.object(base, 'populate_obj') as mocked:
+            form.populate_obj_inline = MagicMock()
+            form.populate_obj(generic_obj)
+            form.populate_obj_inline.assert_called_once_with(generic_obj)
+            mocked.assert_called_one_with(generic_obj)
 
 
 @pytest.fixture(params=[0, 1, 2])
@@ -248,7 +295,6 @@ class TestNormalModelFormWithInline(object):
             self.values_on_children_no = obj_cfg[2]
             self.obj = obj
 
-    # TODO: Test process_inline
     def test_process_inline(self, form_with_inlines, formdata_with_inlines):
         self._parse_fixtures(form_with_inlines, formdata_with_inlines)
         form = self.Form(self.formdata)
@@ -493,7 +539,6 @@ class TestNormalModelFormWithInline(object):
         with pytest.raises(TypeError):
             Form1()
 
-    # TODO: Test populate_obj_inline
     def test_populate_obj_inline_edit(self, _basic_form_with_inline,
                                       DBSession):
         ParentForm, ChildForm = _basic_form_with_inline
@@ -704,6 +749,4 @@ class TestAnyModelForm(object):
 # Tests for all forms that inherit from BaseInLine
 class TestInlineModelForm(object):
     # TODO: test pks_from_formdata
-    # TODO: test extra
-    # TODO: test relationship_name
     pass

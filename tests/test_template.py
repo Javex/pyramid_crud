@@ -1,7 +1,8 @@
 import pytest
 from pyramid.renderers import render as pyramid_render, get_renderer
 from pyramid_crud import forms, views
-from sqlalchemy import Column, String, Boolean
+from sqlalchemy import Column, String, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
 from webob.multidict import MultiDict
 from wtforms.fields import HiddenField
 import re
@@ -169,3 +170,35 @@ def test_edit_field_errors(render_edit, view):
     view.request.POST["save"] = "Foo"
     out = render_edit(view=view, **view.edit())
     assert err_required.search(out)
+
+
+@pytest.mark.parametrize("with_obj", [True, False])
+def test_edit_inline_tabular(render_edit, view, model_factory, form_factory,
+                             with_obj):
+    cols = [Column('parent_id', ForeignKey('model.id')),
+            Column('child_text', String)]
+    rels = {'parent': relationship(view.Form.Meta.model, backref="children")}
+    ChildModel = model_factory(cols, 'Child', relationships=rels)
+    ChildForm = form_factory(name='ChildForm', base=forms.TabularInLine,
+                             model=ChildModel)
+    ChildForm.extra = 1
+    ChildForm.relationship_name = 'children'
+    view.Form.inlines.append(ChildForm)
+
+    if with_obj:
+        parent = view.Form.Meta.model(test_text='Foo')
+        parent.children.append(ChildModel())
+        view.dbsession.add(parent)
+        view.dbsession.flush()
+        view.request.matchdict["id"] = parent.id
+    out = render_edit(view=view, **view.edit())
+    assert "Childs" in out
+    assert "<th>child_text</th>" in out
+    assert "<th>Delete?</th>" in out
+    assert 'name="child_0_child_text"' in out
+    assert 'name="delete_child_0"' in out
+    assert 'name="add_child"' in out
+    if with_obj:
+        assert 'name="child_0_id" value="1"' in out
+    else:
+        assert not re.search(r'child_\d+_id', out)

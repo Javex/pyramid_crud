@@ -24,7 +24,8 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
     def __new__(meta, name, bases, attrs):
         # Copy over docstrings from parents
         def get_mro_classes(bases):
-            return (mro_cls for base in bases for mro_cls in base.mro())
+            return (mro_cls for base in bases for mro_cls in base.mro()
+                    if mro_cls != object)
         if not('__doc__' in attrs and attrs['__doc__']):
             for mro_cls in get_mro_classes(bases):
                 doc = mro_cls.__doc__
@@ -39,7 +40,7 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
                     if doc:
                         attribute.__doc__ = doc
                         break
-        return wtforms_alchemy.ModelFormMeta.__new__(meta, name, bases, attrs)
+        return super(_CoreModelMeta, meta).__new__(meta, name, bases, attrs)
 
     @meta_property
     def title(cls):
@@ -133,6 +134,14 @@ class CSRFForm(SecureForm):
         return result
 
 
+class ModelMeta(_CoreModelMeta):
+    def __new__(meta, name, bases, attrs):
+        if "inlines" not in attrs:
+            attrs["inlines"] = []
+        return super(ModelMeta, meta).__new__(meta, name, bases, attrs)
+
+
+@six.add_metaclass(ModelMeta)
 class ModelForm(_CoreModelForm):
     """
     Base-class for all regular forms.
@@ -189,8 +198,6 @@ class ModelForm(_CoreModelForm):
         name. This is used internally und you normally do not need to change
         it.
     """
-    inlines = []
-
     @classmethod
     def _relationship_key(self, other_form):
         """
@@ -393,9 +400,15 @@ class BaseInLine(_CoreModelForm):
         model. Check out their documentation for specific details.
 
     relationship_name
-        The name of the relationship to inline. Determined automatically,
-        unless there are multiple relationships between the models in which
-        case this must be overridden by the subclass.
+        The name of the *other side* of the relationship. Determined
+        automatically, unless there are multiple relationships between the
+        models in which case this must be overridden by the subclass.
+
+        For example: If this is the child form to be inlined, the other side
+        might be called ``children`` and this might be called ``parent`` (or
+        it might not even exist, there is no need for a bidrectional
+        relationship). The correct value would then be ``children`` *not*
+        ``parent``.
 
     extra
         How many empty fields to display in which new objects can be added. Pay

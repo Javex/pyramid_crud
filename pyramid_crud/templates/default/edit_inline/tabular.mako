@@ -5,7 +5,7 @@
     <table class="table">
         <thead>
             <tr>
-            % for field in inline.form():
+            % for field in inline():
                 <th>${field.label.text}</th>
             % endfor
                 <th>Delete?</th>
@@ -15,9 +15,11 @@
             % for form, is_extra in items:
             <tr>
                 <td style="display:none">
-                % for name, value in form.primary_keys:
-                    <input type="hidden" name="${inline.name}_${loop.index}_${name}" value="${value or ''}" />
-                % endfor
+				% if form.obj:
+					% for name, value in form.primary_keys:
+						<input type="hidden" name="${inline.name}_${loop.index}_${name}" value="${value or ''}" />
+					% endfor
+				% endif
                 </td>
                 % for field in form:
                 <td>
@@ -34,7 +36,7 @@
             </tr>
         % endfor
             <tr>
-                <td colspan="${len(list(inline.form())) + 2}">
+                <td colspan="${len(list(inline())) + 1}">
                     <input type="submit" 
                         name="add_${inline.name}" 
                         value="Add another ${inline.title}" 
