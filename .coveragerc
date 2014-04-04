@@ -1,2 +1,7 @@
 [run]
 source = pyramid_crud
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def _mako_get_namespace
