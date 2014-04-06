@@ -320,14 +320,14 @@ class CRUDView(object):
 
     .. _crud_Form:
 
-    ``Form``
+    Form
         Mandatory argument that specifies the form class for which this
         view should be created. This must be a form as described in
         :ref:`forms`.
 
     .. _url_path:
 
-    ``url_path``
+    url_path
         Mandatory arguments if the default
         :ref:`view_configurator <view_configurator_cfg>` is used. It determines
         the base path under which this view should be available.
@@ -340,7 +340,7 @@ class CRUDView(object):
         implementation of the configurator but it is recommended to keep this
         parameter for custom implementations as well.
 
-    ``dbsession``
+    dbsession
         Return the current SQLAlchemy session. By default this
         expects a ``dbsession`` attribute on the ``request`` object. It is
         **mandatory** that you either attach the attribute using an event
@@ -349,7 +349,7 @@ class CRUDView(object):
 
     .. _list_display:
 
-    ``list_display``
+    list_display
         A tuple if items which should be displayed on the list
         view. By default a single column of the models ``__str__`` method is
         used. There are several possibilities of what you might specify here
@@ -441,7 +441,7 @@ class CRUDView(object):
 
     .. _list_display_links:
 
-    ``list_display_links``
+    list_display_links
         Specify which of the displayed columns should be turned into links
         that open the edit view of that instance. By default, the first
         column is used.
@@ -460,20 +460,20 @@ class CRUDView(object):
         This configuration will turn the columns ``column1`` and ``column3``
         into links.
 
-    ``template_dir``
+    template_dir
         The directory where to find templates. The default
         templates are provided in the ``default`` folder. This is used
         by the default :ref:`view_configurator <view_configurator_cfg>` and not
         necessarily used if you change its behavior.
 
-    ``template_ext``
+    template_ext
         Which file extension to use for templates. By default,
         Mako templates are used and so the extension is ``.mako`` but any
         rendered that is recognized by pramid can be used. This is used
         by the default :ref:`view_configurator <view_configurator_cfg>` and not
         necessarily used if you change its behavior.
 
-    ``template_base_name``
+    template_base_name
         The name of the base template, i.e. from which all
         templates should inherit. Using this you can override the general style
         of the page using a single template instead of having to copy all of
@@ -483,14 +483,14 @@ class CRUDView(object):
 
             Implement / Test / Document better
 
-    ``button_form``
+    button_form
         The form which to use for button actions that should be
         protected by CSRF. Normally, this does not need to be overridden,
         except if a change in those button-only forms such as the delete button
         in the list view is desired. Contrary to a Link this is a necessity to
         prevent CSRF attacks.
 
-    ``delete_form_factory``
+    delete_form_factory
         A callable which creates a delete form suitable
         for being displayed as a button to delete an item. By default this is
         based on the ``button_form`` attribute and additionally to all
@@ -499,7 +499,7 @@ class CRUDView(object):
 
     .. _view_configurator_cfg:
 
-    ``view_configurator``
+    view_configurator
         A class that configures all views and routes for this view class. The
         default implementation is :class:`ViewConfigurator` which covers
         basic route & view configuration. However, if you need more advanced
@@ -509,14 +509,14 @@ class CRUDView(object):
 
     .. _fieldsets:
 
-    ``fieldsets``
+    fieldsets
         .. todo::
 
             Document
 
     There are also some attributes which you can access.
 
-    ``routes``
+    routes
         A dictionary mapping action names to routes. Action names are such as
         ``list`` or ``edit`` and they all have unique route names that can be
         given to ``request.route_url``. You can use it like this:
