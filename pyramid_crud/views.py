@@ -293,15 +293,28 @@ class CRUDCreator(type):
                     "Invalid configuration. The following attributes are "
                     "missing and need to be defined for a complete "
                     "configuration : %s" % ", ".join(missing))
-            info = venusian.attach(cls, cb)
+            if cls.view_configurator is not None:
+                info = venusian.attach(cls, cb)
 
 
 @six.add_metaclass(CRUDCreator)
 class CRUDView(object):
     """
-    The base class for all views. Views directly or indirectly subclassed from
-    this define actual views (or intermediate base classes, if ``__abstract__``
-    is ``True``).
+    The base class for all views. Subclassing directly from this gets you a
+    new view configuration for a single model & form. If you specify
+    ``__abstract__`` on it, the class will not be configured at all and you can
+    use it as your own base class.
+
+    .. note::
+
+        Configuration is done by Pyramid the moment you call
+        :meth:`pyramid.config.Configurator.scan` in a way similar to what
+        the :class:`pyramid.view.view_config` decorator does. If you want to
+        completely disable this behavior, set
+        :ref:`view_configurator <view_configurator_cfg>` to ``None``. Then no
+        route configuration will be done and you have to set up views and
+        routes yourself. This is an advanced technique not recommended for
+        beginners.
 
     The following attributes can be defined to override behavior of the view:
 

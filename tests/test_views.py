@@ -486,6 +486,19 @@ class TestCrudCreator(object):
             assert view in config.add_view.call_args_list
         assert View.routes == route_names
 
+    def test_disabled_configuration(self):
+        view = self.make_view(url_path='/test', Form=self.Form,
+                              view_configurator=None)
+        assert not hasattr(view, '__venusian_callbacks__')
+
+    def test_disabled_configuration_still_checks(self):
+        with pytest.raises(AttributeError):
+            self.make_view(url_path='/test', view_configurator=None)
+        with pytest.raises(AttributeError):
+            self.make_view(Form=self.Form, view_configurator=None)
+        with pytest.raises(AttributeError):
+            self.make_view(view_configurator=None)
+
 
 class TestViewConfiguratorImplementations(object):
 
