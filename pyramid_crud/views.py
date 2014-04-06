@@ -507,13 +507,6 @@ class CRUDView(object):
         parameter. See the documentation on :class:`ViewConfigurator` for
         details on how to achieve that.
 
-    .. _fieldsets:
-
-    fieldsets
-        .. todo::
-
-            Document
-
     There are also some attributes which you can access.
 
     routes
