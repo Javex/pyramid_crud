@@ -14,7 +14,7 @@ Configuration
 
 To configure a normal form, you subclass the :class:`.ModelForm`. On this
 subclass there are several options you can/must override. The mandatory options
-are listed first, followed by a list of optionl configuration parameters.
+are listed first, followed by a list of optional configuration parameters.
 Finally, you can of course always override the methods on the form.
 
 .. autoclass:: ModelForm

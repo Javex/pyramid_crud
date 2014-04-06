@@ -2,8 +2,8 @@
 <%!
     import sqlalchemy as sa
 %>
-<h1>${view.title_plural}</h1>
-<a href="${request.route_url(view.route_name('new'))}" class="btn btn-primary pull-right">New</a>
+<h1>${view.Form.title_plural}</h1>
+<a href="${request.route_url(view.routes['new'])}" class="btn btn-primary pull-right">New</a>
 <table class="table">
     <thead>
         <tr>

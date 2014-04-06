@@ -5,7 +5,7 @@
         <link rel="stylesheet" href="/static/style.css">
         <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>${view.title_plural} | CRUD</title>
+        <title>${view.Form.title_plural} | CRUD</title>
     </head>
     <body style="margin:0 20px">
     % for msg in request.session.pop_flash('error'):

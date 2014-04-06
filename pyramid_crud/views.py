@@ -16,6 +16,253 @@ except ImportError:  # pragma: no cover
 log = logging.getLogger(__name__)
 
 
+class ViewConfigurator(object):
+    """
+    The standard implementation of the view configuration. It performs the
+    most basic configuration of routes and views without any extra
+    functionality.
+
+    This is sufficient in many cases, but there are several applications where
+    you might want to completely or partially change this behavior. Any time
+    you want to pass additional arguments to
+    :meth:`pyramid.config.Configurator.add_route` or
+    :meth:`pyramid.config.Configurator.add_view` you can just subclass this and
+    override the specific methods.
+
+    All the public methods must always be implemented according to their
+    documentation or the configuration of views and routes will fail. If you
+    are unsure, you can take a look at the default implementation. It is just
+    a very thin wrapper around the above mentioned methods.
+
+    During instantiation the arguments ``config`` representing an instance of
+    :class:`pyramid.config.Configurator` and ``view_class`` being your
+    subclassed view class are given to the instance and stored under these
+    values as its attributes.
+
+    From the ``view_class`` parameter you can access the complete configuration
+    as documented on :class:`CRUDView`. ``config`` should then be used to add
+    routes and views and possibly other configuration you might need.
+    """
+
+    def __init__(self, config, view_class):
+        self.config = config
+        self.view_class = view_class
+
+    def _get_route_name(self, action):
+        """
+        Get a name for a route of a specific action. The default implementation
+        provides the fully quallyfied name of the view plus the action, e.g.
+        ``mypackage.views.MyView.list`` (in this case, the action is "list" for
+        the class "MyView" in the module "mypackage.views").
+
+        .. note::
+
+            In theory this implementation is ambigous, because you could very
+            well have two classes with the same name in the same module.
+            However, this would be a very awkward implementation and is not
+            recommended anyway. If you really choose to do such a thing, you
+            should probably find a better way of naming your routes.
+        """
+        params = {'module': self.view_class.__module__,
+                  'class': self.view_class.__name__,
+                  'action': action}
+        return "%(module)s.%(class)s.%(action)s" % params
+
+    def _template_for(self, action):
+        """
+        Return the name of the template to be used. By default this uses the
+        template in the folder ``template_dir`` with the name
+        ``action + template_ext``, so for example in the default case for a
+        list view: "default/list.mako". The parameters ``template_dir`` and
+        ``template_ext`` are based on the parameters in :class:`.CRUDView`.
+        """
+        params = {
+            'template_dir': self.view_class.template_dir,
+            'action': action,
+            'template_ext': self.view_class.template_ext,
+        }
+        default_name = '%(template_dir)s/%(action)s%(template_ext)s' % params
+        return getattr(self.view_class, '%s_template' % action, default_name)
+
+    def _configure_view(self, action, route_action=None, *args, **kw):
+        """
+        Configure a view via :meth:`pyramid.config.Configurator.add_view` while
+        passing any additional arguments to it.
+
+        :param action: The name of the attribute on the view class that
+                       represents the action. For example, in the default
+                       implementation the ``list`` action corresponds to
+                       :meth:`CRUDView.list`. If you rename them, e.g. by
+                       naming the ``list`` action "_my_list", this would have
+                       to be ``_my_list`` regardless of the name of the
+                       action.
+
+        :param route_action: An optional parameter that is used as the name
+                             base for the route. If this is missing, it will
+                             take the same value as ``action``. In the default
+                             implementation it is used to distinguish between
+                             ``new`` and ``edit`` which use the same action,
+                             view and template but different route names.
+
+        Overriding this method allows you to change the view configuration for
+        all configured views at once, i.e. you don't have to change the public
+        methods at all. Just look at their default implementation to see the
+        parameters they use.
+        """
+        if route_action is None:
+            route_action = action
+        self.config.add_view(self.view_class, *args, attr=action,
+                             route_name=self._get_route_name(route_action),
+                             **kw)
+
+    def _configure_route(self, action, suffix, *args, **kw):
+        """
+        Set up a route via :meth:`pyramid.config.Configurator.add_route` while
+        passing all addtional arguments through to it.
+
+        :param action: The action upon which to base the route name. It must
+                       be the same as ``route_action`` on
+                       :meth:`._configure_view`.
+
+        :param suffix: The suffix to be used for the actual path. It is
+                       appended to the ``url_path`` directly. This may be empty
+                       (as is the case for the default list view) but must
+                       always be explicitly specified. The result of this will
+                       be passed to ``add_route`` and so may (and often will)
+                       include parameters such as ``/{id}``.
+
+        Overriding this method can be done in the same manner as described for
+        :meth:`._configure_view`.
+
+        .. warning::
+
+            Some methods on the view require primary keys of the object in
+            question in the ``matchdict`` of the request. To guarantee this,
+            the routes have to be correctly set up, i.e. each route that
+            requires this primary key (or keys, depending on the model) has to
+            have a pattern where each primary key name appears once. The
+            default implementation takes care of this via
+            :meth:`_get_route_pks`, but if you change things you have to
+            ensure this yourself.
+
+            Which methods require which values is documented on the respective
+            views of :class:`CRUDView`.
+        """
+        # suffix may be something like /new or /{id} etc. May also be empty,
+        # e.g. for the list view.
+        params = {
+            'base_path': self.view_class.url_path,
+            'suffix': suffix
+        }
+        url = '%(base_path)s%(suffix)s' % params
+        route_name = self._get_route_name(action)
+        self.config.add_route(route_name, url, *args, **kw)
+        return route_name
+
+    def _get_route_pks(self):
+        """
+        Get a string representing all primary keys for a route suitable to
+        be given as suffix to :meth:`._configure_route`. Some examples will
+        probably best describe the default behavior.
+
+        In the case of a model with a single primary key ``id``, the result is
+        the very simple string ``{id}``. If you add this to a route, the
+        primary key of the object will be in the ``matchdict`` under the key
+        ``id``.
+
+        If you have a model with multiple primary keys, say composite foreign
+        keys, called ``model1_id`` and ``model2_id`` then the result would be
+        ``{model1_id},{model2_id}``. The order is not important on this one as
+        pyramids routing system will fully take care of it.
+
+        .. note::
+
+            If you have some kind of setup where one of the primary keys may
+            contain a comma, this implementation is likely to fail and you
+            have to change it. However, in most cases you will **not** have a
+            comma and this should be fine.
+        """
+        model = self.view_class.Form.Meta.model
+        pks = ",".join('{%s}' % pk_name for pk_name in get_pks(model))
+        return pks
+
+    def configure_list_view(self):
+        """
+        Configure the "list" view by setting its route and view. This method
+        must call ``add_view`` to configure the view and ``add_route`` to
+        connect a route to it. Afterwards, it must return the name of the
+        configured route that links route and view. This will then be
+        stored in the view's ``route`` dictionary under the "list" key.
+
+        The default implementation of :meth:`CRUDView.list` only expects to be
+        run on a GET request and as such no POST data is expected. For a clean
+        configuration, you should make sure that only GET requests reach it
+        by passing ``request_method='GET'`` to ``add_view``.
+
+        A very simple example implementation might look like this:
+
+        .. code-block:: python
+
+            def configure_list_view(self):
+                self.config.add_view('myview-list',
+                                     renderer='default/list.mako',
+                                     request_method='GET')
+                self.config.add_route('myview-list', self.view_class.url_path)
+                return 'myview-list'
+
+        This does a few things:
+
+        * It sets up the view under the alias ``myview-list`` with the template
+          ``default/list.mako`` (the standard list template) and sets the
+          request method to ``GET`` (as noted above).
+
+        * It connects the alias to the configured route via the
+          :ref:`url_path <url_path>` configuration parameter (the list view is
+          just the base route in this case, but that is totally up to you).
+
+        * It returns this alias from the function so that it can be stored in
+          the ``routes`` dictionary on the view.
+        """
+        self._configure_view('list', request_method='GET',
+                             renderer=self._template_for('list'))
+        return self._configure_route('list', '')
+
+    def configure_edit_view(self):
+        """
+        This method behaves exactly like
+        :meth:`ViewConfigurator.configure_list_view` except it must configure
+        the edit view, i.e. the view for editing existing objects. It must
+        return the name of the route as well that will then be stored under the
+        "edit" key.
+        """
+        self._configure_view('edit', renderer=self._template_for('edit'))
+        return self._configure_route('edit', '/%s' % self._get_route_pks())
+
+    def configure_new_view(self):
+        """
+        This method behaves exactly like
+        :meth:`ViewConfigurator.configure_list_view` except it must configure
+        the new view, i.e. the view for adding new objects. It must
+        return the name of the route as well that will then be stored under the
+        "new" key.
+        """
+        self._configure_view('edit', 'new',
+                             renderer=self._template_for('edit'))
+        return self._configure_route('new', '/new')
+
+    def configure_delete_view(self):
+        """
+        This method behaves exactly like
+        :meth:`ViewConfigurator.configure_list_view` except it must configure
+        the delete view, i.e. the view for deleting an object. It must
+        return the name of the route as well that will then be stored under the
+        "delete" key.
+        """
+        self._configure_view('delete', request_method='POST')
+        return self._configure_route('delete',
+                                     '/%s/delete' % self._get_route_pks())
+
+
 class CRUDCreator(type):
     """
     Metaclass for :class:`CRUDView` to handle automatically registering views
@@ -25,30 +272,18 @@ class CRUDCreator(type):
     def __init__(cls, name, bases, attrs):
         def cb(context, name, ob):
             config = context.config.with_package(info.module)
-            config.add_route(cls.route_name('list'),
-                             '%s' % cls.url_path)
-            config.add_view(cls, attr='list',
-                            route_name=cls.route_name('list'),
-                            renderer=cls._template_for('list'),
-                            request_method='GET')
+            configurator = cls.view_configurator(config, cls)
+            list_route = configurator.configure_list_view()
+            edit_route = configurator.configure_edit_view()
+            new_route = configurator.configure_new_view()
+            delete_route = configurator.configure_delete_view()
 
-            config.add_route(cls.route_name('new'),
-                             '%s/new' % cls.url_path)
-            config.add_view(cls, attr='edit', route_name=cls.route_name('new'),
-                            renderer=cls._template_for('edit'))
-            pks = ",".join('{%s}' % pk_name
-                           for pk_name in get_pks(cls.Form.Meta.model))
-            config.add_route(cls.route_name('edit'),
-                             '%s/%s' % (cls.url_path, pks))
-            config.add_view(cls, attr='edit',
-                            route_name=cls.route_name('edit'),
-                            renderer=cls._template_for('edit'))
-
-            config.add_route(cls.route_name('delete'),
-                             '%s/%s/delete' % (cls.url_path, pks))
-            config.add_view(cls, attr='delete',
-                            route_name=cls.route_name('delete'),
-                            request_method='POST')
+            cls.routes = {
+                'list': list_route,
+                'edit': edit_route,
+                'new': new_route,
+                'delete': delete_route,
+            }
         if '__abstract__' not in attrs:
             have_attrs = set(attrs)
             need_attrs = set(('Form', 'url_path'))
@@ -77,9 +312,20 @@ class CRUDView(object):
         view should be created. This must be a form as described in
         :ref:`forms`.
 
+    .. _url_path:
+
     ``url_path``
-        Mandatory argument for defining the base path under which
-        this view should be available.
+        Mandatory arguments if the default
+        :ref:`view_configurator <view_configurator_cfg>` is used. It determines
+        the base path under which this view should be available.
+
+        So for example, if this is ``/myitems`` then the list view will be
+        reached under the ``/myitems`` path whereas the new view will be
+        under ``/myitems/new``.
+
+        How and if this parameter is used depends entirely on the
+        implementation of the configurator but it is recommended to keep this
+        parameter for custom implementations as well.
 
     ``dbsession``
         Return the current SQLAlchemy session. By default this
@@ -180,28 +426,28 @@ class CRUDView(object):
           a prettier format, it additionally replaces any underscores by
           spaces and captializes each word.
 
-    ``title``
-        The title of the view. By default it uses the name of the model
-        class.
-
-    ``title_plural``
-        The title when used in plural. By default this attached
-        an "s" to the ``title``.
-
     ``template_dir``
         The directory where to find templates. The default
-        templates are provided in the ``default`` folder.
+        templates are provided in the ``default`` folder. This is used
+        by the default :ref:`view_configurator <view_configurator_cfg>` and not
+        necessarily used if you change its behavior.
 
     ``template_ext``
         Which file extension to use for templates. By default,
         Mako templates are used and so the extension is ``.mako`` but any
-        rendered that is recognized by pramid can be used.
+        rendered that is recognized by pramid can be used. This is used
+        by the default :ref:`view_configurator <view_configurator_cfg>` and not
+        necessarily used if you change its behavior.
 
     ``template_base_name``
         The name of the base template, i.e. from which all
         templates should inherit. Using this you can override the general style
         of the page using a single template instead of having to copy all of
         them and editing them one-by-one. It defaults to ``base``.
+
+        .. todo::
+
+            Implement / Test / Document better
 
     ``button_form``
         The form which to use for button actions that should be
@@ -217,12 +463,38 @@ class CRUDView(object):
         typical arguments being accepted, it sets the button value to
         ``Delete``.
 
+    .. _view_configurator_cfg:
+
+    ``view_configurator``
+        A class that configures all views and routes for this view class. The
+        default implementation is :class:`ViewConfigurator` which covers
+        basic route & view configuration. However, if you need more advanced
+        functionalities like, for example, permissions, you can change this
+        parameter. See the documentation on :class:`ViewConfigurator` for
+        details on how to achieve that.
+
     .. _fieldsets:
 
     ``fieldsets``
         .. todo::
 
             Document
+
+    There are also some attributes which you can access.
+
+    ``routes``
+        A dictionary mapping action names to routes. Action names are such as
+        ``list`` or ``edit`` and they all have unique route names that can be
+        given to ``request.route_url``. You can use it like this:
+
+        .. code-block:: python
+
+            url = request.route_url(view.routes["list"])
+
+        This will return a URL to the list view.
+
+        The routes dictionary is populated by the
+        :ref:`view_configurator <view_configurator_cfg>`.
     """
     __abstract__ = True
     template_dir = 'default'
@@ -230,6 +502,7 @@ class CRUDView(object):
     template_base_name = 'base'
     button_form = ButtonForm
     delete_form_factory = partial(ButtonForm, title='Delete')
+    view_configurator = ViewConfigurator
 
     def __init__(self, request):
         self.request = request
@@ -253,29 +526,10 @@ class CRUDView(object):
         return self.request.dbsession
 
     @property
-    def title(self):
-        return inspect(self.Form.Meta.model).class_.__name__
-
-    @property
-    def title_plural(self):
-        return self.title + "s"
-
-    @property
     def list_display(self):
         return ('__str__',)
 
     # Misc helper stuff
-
-    @classmethod
-    def _template_for(cls, action):
-        """
-        Return the name of the template to be used. By default this uses the
-        template in the folder ``template_dir`` with the name
-        ``action + template_ext``, so for example in the default case for a
-        list view: "default/list.mako"
-        """
-        default_name = '%s/%s%s' % (cls.template_dir, action, cls.template_ext)
-        return getattr(cls, '%s_template' % action, default_name)
 
     def _get_request_pks(self):
         """
@@ -324,18 +578,6 @@ class CRUDView(object):
             location=self.request.route_url(route_name, *args, **kw)
         )
 
-    @classmethod
-    def route_name(cls, action):
-        """
-        Get a name for a route of a specific action. The default implementation
-        provides the fully quallyfied name of the view plus the action, e.g.
-        ``mypackage.views.MyView.list``.
-        """
-        params = {'module': cls.__module__,
-                  'class': cls.__name__,
-                  'action': action}
-        return "%(module)s.%(class)s.%(action)s" % params
-
     def _get_route_pks(self, obj):
         """
         Get a dictionary mapping primary key names to values based on the model
@@ -363,7 +605,7 @@ class CRUDView(object):
         :meth:`_delete_route`.
         """
         kw = self._get_route_pks(obj)
-        return self.request.route_url(self.route_name('edit'), **kw)
+        return self.request.route_url(self.routes['edit'], **kw)
 
     def _delete_route(self, obj):
         """
@@ -376,7 +618,7 @@ class CRUDView(object):
             displaying the URL on the page.
         """
         kw = self._get_route_pks(obj)
-        return self.request.route_url(self.route_name('delete'), **kw)
+        return self.request.route_url(self.routes['delete'], **kw)
 
     # Template helper functions
 
@@ -455,12 +697,15 @@ class CRUDView(object):
         can be overridden by subclasses. It only accepts POST request. It has
         no template attached and instead always returns a redirect.
 
+        This method requires the ``matchdict`` to contain the primary keys in
+        the same manner described in :meth:`.edit`.
+
         :return: An instance of :class:`.HTTPFound` to redirect the user,
             either deletion was successful or an error has happened.
         """
         assert self.request.method == 'POST'
 
-        redirect = self.redirect(self.route_name('list'))
+        redirect = self.redirect(self.routes['list'])
         Model = self.Form.Meta.model
         try:
             pks = self._get_request_pks()
@@ -479,16 +724,20 @@ class CRUDView(object):
         obj = self.dbsession.query(Model).get(tuple(pks.values()))
         if obj is not None:
             self.dbsession.delete(obj)
-            self.request.session.flash("%s deleted!" % self.title)
+            self.request.session.flash("%s deleted!" % self.Form.title)
             return redirect
         else:
-            self.request.session.flash("%s not found!" % self.title, 'error')
+            self.request.session.flash("%s not found!" % self.Form.title, 'error')
             raise redirect
 
     def edit(self):
         """
         The default view for editing an item. It loads the configured form and
-        model. The default template is "default/edit.mako".
+        model. The default template is "default/edit.mako". In edit mode (i.e.
+        with an already existing object) it requires
+        a matchdict mapping primary key names to their values. This has to be
+        ensured during route configuring by setting the correct pattern. The
+        default implementation takes correctly care of this.
 
         :return: In case of a GET request a dict with the key ``form`` denoting
             the configured form instance with data from an optional model
@@ -516,7 +765,7 @@ class CRUDView(object):
             log.info("Invalid Request for primary keys: %s threw exception %s"
                      % (self.request.matchdict, exc))
             self.request.session.flash("Invalid URL", 'error')
-            raise self.redirect(self.route_name('list'))
+            raise self.redirect(self.routes['list'])
 
         if pks is not None:
             is_new = False
@@ -553,9 +802,9 @@ class CRUDView(object):
             if is_new:
                 obj = Model()
                 self.dbsession.add(obj)
-                self.request.session.flash("%s added!" % self.title)
+                self.request.session.flash("%s added!" % self.Form.title)
             else:
-                self.request.session.flash("%s edited!" % self.title)
+                self.request.session.flash("%s edited!" % self.Form.title)
 
             # Transfer edits into database
             form.populate_obj(obj)
@@ -565,9 +814,9 @@ class CRUDView(object):
                 self.dbsession.flush()
                 return HTTPFound(location=self._edit_route(obj))
             elif action == 'save_close':
-                return self.redirect(self.route_name('list'))
+                return self.redirect(self.routes['list'])
             elif action == 'save_new':
-                return self.redirect(self.route_name('new'))
+                return self.redirect(self.routes['new'])
             else:
                 # just a saveguard, this is should actually be unreachable
                 # because we already check above

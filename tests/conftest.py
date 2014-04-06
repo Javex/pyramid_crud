@@ -9,6 +9,7 @@ from pyramid import testing
 from pyramid.asset import abspath_from_asset_spec
 from mako.lookup import TemplateLookup
 from tests import all_forms, normal_forms, inline_forms
+from pyramid_crud import views
 try:
     from collections import OrderedDict
 except ImportError:
@@ -30,6 +31,13 @@ def venusian_init(config):
                 cb(context, None, None)
     run_cbs.context = context
     return run_cbs
+
+
+@pytest.fixture(params=[views.ViewConfigurator])
+def view_configurator(request):
+    """Get one of all available view configurators on each invocation thus
+    allowing to test multiple configurators so conform to the specification"""
+    return request.param
 
 
 @pytest.fixture(scope="session")

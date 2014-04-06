@@ -1,5 +1,5 @@
 from pyramid.httpexceptions import HTTPFound
-from pyramid_crud.views import CRUDView
+from pyramid_crud.views import CRUDView, ViewConfigurator
 from pyramid_crud import forms
 from sqlalchemy import Column, String, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
@@ -51,6 +51,12 @@ class TestCRUDView(object):
             Form = self.Form
             url_path = '/test'
         self.View = MyView
+        self.View.routes = {
+            'list': 'tests.test_views.MyView.list',
+            'delete': 'tests.test_views.MyView.delete',
+            'edit': 'tests.test_views.MyView.edit',
+            'new': 'tests.test_views.MyView.new',
+        }
         self.view = self.View(self.request)
 
     @pytest.fixture
@@ -70,12 +76,6 @@ class TestCRUDView(object):
         ChildModel = model_factory(cols, 'Child', relationships=rels)
         ChildForm = form_factory(model=ChildModel, base=forms.CSRFModelForm)
         return ChildForm
-
-    def test_title(self):
-        assert self.view.title == "Model"
-
-    def test_title_plural(self):
-        assert self.view.title_plural == "Models"
 
     def test_list_display(self):
         [default] = self.view.list_display
@@ -205,13 +205,6 @@ class TestCRUDView(object):
         assert isinstance(self.view.delete_form(), forms.ButtonForm)
         assert isinstance(self.view._delete_form, forms.ButtonForm)
 
-    def test__template_for(self):
-        self.View.foo_template = "sometemplate.mako"
-        assert self.View._template_for("foo") == "sometemplate.mako"
-
-    def test__template_for_default(self):
-        assert self.View._template_for("foo") == "default/foo.mako"
-
     @pytest.mark.usefixtures("route_setup")
     def test_redirect(self):
         redirect = self.view.redirect("tests.test_views.MyView.list")
@@ -225,9 +218,6 @@ class TestCRUDView(object):
         redirect = self.view.redirect()
         assert isinstance(redirect, HTTPFound)
         assert redirect.location == 'http://example.com/test'
-
-    def test_route_name(self):
-        assert self.View.route_name("test") == "tests.test_views.MyView.test"
 
     def test__get_route_pks(self, obj):
         assert self.view._get_route_pks(obj) == {'id': obj.id}
@@ -461,26 +451,32 @@ class TestCrudCreator(object):
         context = MagicMock()
         cb(context, None, None)
         config = context.config.with_package()
-        routes = [('tests.test_views.MyView.list', '/test'),
-                  ('tests.test_views.MyView.new', '/test/new'),
-                  ('tests.test_views.MyView.edit', '/test/{id}'),
-                  ('tests.test_views.MyView.delete', '/test/{id}/delete')]
+        route_names = {
+            'list': 'tests.test_views.MyView.list',
+            'new': 'tests.test_views.MyView.new',
+            'edit': 'tests.test_views.MyView.edit',
+            'delete': 'tests.test_views.MyView.delete',
+        }
+        routes = [(route_names["list"], '/test'),
+                  (route_names["new"], '/test/new'),
+                  (route_names["edit"], '/test/{id}'),
+                  (route_names["delete"], '/test/{id}/delete')]
         views = [((View,),
                   {'attr': 'list',
-                   'route_name': 'tests.test_views.MyView.list',
+                   'route_name': route_names["list"],
                    'renderer': 'default/list.mako',
                    'request_method': 'GET'}),
                  ((View,),
                   {'attr': 'edit',
-                   'route_name': 'tests.test_views.MyView.edit',
+                   'route_name': route_names["edit"],
                    'renderer': 'default/edit.mako'}),
                  ((View,),
                   {'attr': 'edit',
-                   'route_name': 'tests.test_views.MyView.new',
+                   'route_name': route_names["new"],
                    'renderer': 'default/edit.mako'}),
                  ((View,),
                   {'attr': 'delete',
-                   'route_name': 'tests.test_views.MyView.delete',
+                   'route_name': route_names["delete"],
                    'request_method': 'POST'}),
                  ]
         assert config.add_route.call_count == 4
@@ -488,3 +484,66 @@ class TestCrudCreator(object):
         for route, view in zip(routes, views):
             assert (route, {}) in config.add_route.call_args_list
             assert view in config.add_view.call_args_list
+        assert View.routes == route_names
+
+
+class TestViewConfiguratorImplementations(object):
+
+    @pytest.fixture(autouse=True)
+    def _prepare(self, view_configurator):
+        self.conf_class = view_configurator
+        self.config = MagicMock()
+
+        class MyView(CRUDView):
+            url_path = '/test'
+            Form = MagicMock()
+        self.view = MyView
+        self.conf = self.conf_class(self.config, self.view)
+
+    def test_init(self):
+        assert self.conf.config is self.config
+        assert self.conf.view_class is self.view
+
+    @pytest.mark.parametrize("action", ["list", "new", "delete", "edit"])
+    def test_configure_view_methods(self, action):
+        meth = getattr(self.conf, 'configure_%s_view' % action)
+        assert meth()
+        assert self.config.add_route.assert_called_once()
+        assert self.config.add_view.assert_called_once()
+
+
+class TestViewConfiguratorDefault(object):
+
+    @pytest.fixture(autouse=True)
+    def _prepare(self):
+        self.config = MagicMock()
+
+        class MyView(CRUDView):
+            url_path = '/test'
+            Form = MagicMock()
+        self.view = MyView
+        self.conf = ViewConfigurator(self.config, self.view)
+
+    @pytest.mark.parametrize("action", ["list", "new", "delete", "edit"])
+    def test_get_route_name(self, action):
+        expected_name = 'tests.test_views.MyView.%s' % action
+        assert self.conf._get_route_name(action) == expected_name
+
+    def test_get_route_name_unique(self):
+        names = set()
+        for action in ["list", "new", "delete", "edit", "foo", "lol"]:
+            name = self.conf._get_route_name(action)
+            assert name not in names
+            names.add(name)
+
+    def test__template_for(self):
+        self.view.foo_template = "sometemplate.mako"
+        assert self.conf._template_for("foo") == "sometemplate.mako"
+
+    def test__template_for_default(self):
+        assert self.conf._template_for("foo") == "default/foo.mako"
+
+    def test__template_for_params(self):
+        self.view.template_dir = 'somedir'
+        self.view.template_ext = '.txt'
+        assert self.conf._template_for("foo") == "somedir/foo.txt"

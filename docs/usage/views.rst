@@ -10,6 +10,43 @@ Add a New View
 Configuration
 -------------
 
+The main configuration of the library is done on the view. By subclassing
+:class:`.CRUDView` for each new view you can create an individual configuration
+that turns your model & form into a fully accessible CRUD interface. The
+available confiugration parameters are described on the class:
+
+.. module:: pyramid_crud.views
+
+.. autoclass:: CRUDView
+
+.. _view_configurator:
+
+View & Route Setup
+~~~~~~~~~~~~~~~~~~
+
+Setting up views and routes is delegated to a special configurator class that
+creates a route & view for each available view, i.e. list, edit, new and
+delete. Since you often need to change the routes and views to match your
+needs, you can subclass this and start overwriting its behavior. The interface
+is very simple:
+
+.. note::
+
+    There is a slight overhead to configuring views like this because it
+    requires the creation of an additional class. However, approaches like
+    configuring parameters directly on the view are inflexible and setting
+    awkward callables (in theory the most pythonic way) look ugly. Thus,
+    this method is both flexible and easy to read.
+
+.. autoclass:: ViewConfigurator
+
+.. automethod:: ViewConfigurator.configure_list_view
+.. automethod:: ViewConfigurator.configure_edit_view
+.. automethod:: ViewConfigurator.configure_new_view
+.. automethod:: ViewConfigurator.configure_delete_view
+
+There are also some :ref:`helper methods <view_configurator_api>` available.
+
 .. _info_dict:
 
 The Info Dictionary
@@ -45,12 +82,51 @@ provide a value. The follwoing values are available:
     This value is not always set, but when it is set, it indicates if this item
     is a boolean type. Currently this is only set for the list headings and
     there it is unused but can be adapted by custom templates.
-        
 
 API
 ---
 
-.. automodule:: pyramid_crud.views
+The classes, methods and attributes described here are normally not used
+directly by the user of the library and are just here for the sake of
+completeness.
 
-.. autoclass:: CRUDView
-    :members:
+:class:`CRUDView`
+~~~~~~~~~~~~~~~~~
+
+The following methods refer to specific views:
+
+.. automethod:: CRUDView.list
+.. automethod:: CRUDView.delete
+.. automethod:: CRUDView.edit
+
+Addtionally, the following helper methods are used internally during several
+sections of the library:
+
+.. automethod:: CRUDView.delete_form
+.. automethod:: CRUDView.redirect
+.. automethod:: CRUDView._get_request_pks
+.. automethod:: CRUDView._get_route_pks
+.. automethod:: CRUDView._edit_route
+.. automethod:: CRUDView._delete_route
+.. automethod:: CRUDView.iter_head_cols
+.. automethod:: CRUDView.iter_list_cols
+
+.. _view_configurator_api:
+
+:class:`ViewConfigurator`
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In addition to the methods described above, the default implementation has a
+few helper
+methods. These are not required in any case since they are only called by the
+above methods. However, since these methods are used to factor out common
+tedious work, you might either use or override them and possibly not even touch
+the default implementations above.
+
+.. automethod:: ViewConfigurator._configure_view
+.. automethod:: ViewConfigurator._configure_route
+.. automethod:: ViewConfigurator._get_route_name
+.. automethod:: ViewConfigurator._template_for
+.. automethod:: ViewConfigurator._get_route_pks
+
+

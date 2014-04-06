@@ -4,6 +4,7 @@ from pyramid_crud import forms, views
 from sqlalchemy import Column, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from webob.multidict import MultiDict
+from pyramid.interfaces import IRendererFactory
 from wtforms.fields import HiddenField
 import re
 
@@ -51,10 +52,10 @@ def view(pyramid_request, model_factory, form_factory, venusian_init, config,
 
 
 @pytest.fixture
-def render_base(pyramid_request):
+def render_base(pyramid_request, config):
     # For base we need an inheriting template to avoid recursion
     tmpl = """<%inherit file="default/base.mako"/>Test Body"""
-    renderer = get_renderer('test.mako', 'pyramid_crud')
+    renderer = config.registry.queryUtility(IRendererFactory, '.mako')
     renderer.lookup.put_string('test.mako', tmpl)
     return render_factory("test.mako", pyramid_request)
 
