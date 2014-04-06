@@ -153,12 +153,14 @@ class TestCRUDView(object):
 
     def test_iter_list_cols_default(self, obj):
         cols = list(self.view.iter_list_cols(obj))
-        assert cols == ['ModelStr']
+        assert cols == [('__str__', 'ModelStr')]
 
     def test_iter_list_cols_model_attr(self, obj):
         self.View.list_display = ('id', 'test_text', 'test_bool')
         cols = list(self.view.iter_list_cols(obj))
-        assert cols == [1, 'test', True]
+        assert cols == [('id', 1),
+                        ('test_text', 'test'),
+                        ('test_bool', True)]
 
     def test_iter_list_cols_model_callable(self, obj):
         def meth(self):
@@ -166,14 +168,14 @@ class TestCRUDView(object):
         self.Model.test_text_upper = meth
         self.View.list_display = ('test_text_upper',)
         cols = list(self.view.iter_list_cols(obj))
-        assert cols == ['TEST']
+        assert cols == [('test_text_upper', 'TEST')]
 
     def test_iter_list_cols_generic_callable(self, obj):
         def meth(obj):
             return obj.test_text.upper()
         self.View.list_display = (meth,)
         cols = list(self.view.iter_list_cols(obj))
-        assert cols == ['TEST']
+        assert cols == [('meth', 'TEST')]
 
     def test_iter_list_cols_view_callable(self, obj):
         def upper(self, obj):
@@ -181,7 +183,7 @@ class TestCRUDView(object):
         self.View.upper = upper
         self.View.list_display = ('upper',)
         cols = list(self.view.iter_list_cols(obj))
-        assert cols == ['TEST']
+        assert cols == [('upper', 'TEST')]
 
     def test_template_dir(self):
         assert self.view.template_dir == 'default'

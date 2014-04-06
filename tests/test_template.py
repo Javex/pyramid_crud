@@ -1,5 +1,5 @@
 import pytest
-from pyramid.renderers import render as pyramid_render, get_renderer
+from pyramid.renderers import render as pyramid_render
 from pyramid_crud import forms, views
 from sqlalchemy import Column, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
@@ -203,3 +203,14 @@ def test_edit_inline_tabular(render_edit, view, model_factory, form_factory,
         assert 'name="child_0_id" value="1"' in out
     else:
         assert not re.search(r'child_\d+_id', out)
+
+
+def test_list_display_links(render_list, view):
+    obj = view.Form.Meta.model(test_text='Testval', test_bool=True)
+    view.request.dbsession.add(obj)
+    view.request.dbsession.flush()
+    view.__class__.list_display_links = ('test_text', 'test_bool')
+    out = render_list(view=view, **view.list())
+    search_re = r'<a href="http://example.com/test/1">\s*%s\s*</a>'
+    assert re.search(search_re % 'Testval', out)
+    assert re.search(search_re % 'Yes', out)

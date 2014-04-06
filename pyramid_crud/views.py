@@ -439,6 +439,27 @@ class CRUDView(object):
           a prettier format, it additionally replaces any underscores by
           spaces and captializes each word.
 
+    .. _list_display_links:
+
+    ``list_display_links``
+        Specify which of the displayed columns should be turned into links
+        that open the edit view of that instance. By default, the first
+        column is used.
+
+        This should be any kind of iterable, preferrably a tuple or set for
+        performance reasons.
+
+        Example:
+
+        .. code-block:: python
+
+            class MyView(CRUDView):
+                list_display = ('column1', 'column2', 'column3')
+                list_display_links = ('column1', 'column3')
+
+        This configuration will turn the columns ``column1`` and ``column3``
+        into links.
+
     ``template_dir``
         The directory where to find templates. The default
         templates are provided in the ``default`` folder. This is used
@@ -677,6 +698,9 @@ class CRUDView(object):
         determine the columns.
         """
         for col in self.list_display:
+            title = col
+            if callable(title):
+                title = title.__name__
             if isinstance(col, (six.text_type, six.binary_type)):
                 if hasattr(obj, col):
                     col = getattr(obj, col)
@@ -688,7 +712,7 @@ class CRUDView(object):
                         col = col(obj)
             elif callable(col):
                 col = col(obj)
-            yield col
+            yield title, col
 
     # Actual admin views
 

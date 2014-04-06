@@ -18,15 +18,21 @@
     <tbody>
             % for item in items:
                 <tr>
-                    % for col in view.iter_list_cols(item):
+                    % for title, col in view.iter_list_cols(item):
                         % if col is True or col is False:
                             <td class="text-${'success' if col else 'danger'} text-center">
                         % else:
                             <td>
                         % endif
-                            % if loop.first:
+                            % if title in getattr(view, 'list_display_links', []) or not hasattr(view, 'list_display_links') and loop.first:
                                 <a href="${view._edit_route(item)}">
-                                    ${col}
+                                    % if col is True:
+                                        Yes
+                                    % elif col is False:
+                                        No
+                                    % else:
+                                        ${col}
+                                    % endif
                                 </a>
                             % else:
                                 % if col is True:
