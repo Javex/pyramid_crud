@@ -804,7 +804,7 @@ class CRUDView(object):
         else:
             is_new = True
             form = self.Form(self.request.POST, csrf_context=self.request)
-        form.session = self.request.dbsession
+        form.session = self.dbsession
 
         # Prepare return values
         retparams = {'form': form, 'is_new': is_new}
