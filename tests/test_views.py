@@ -362,8 +362,8 @@ class TestCRUDView(object):
         self.request.POST['items'] = str(obj.id)
         response = self.view.list()
         assert isinstance(response, Response)
-        assert 'Are you sure you want to delete' in response.body
-        assert '<li>ModelStr</li>' in response.body
+        assert 'Are you sure you want to delete' in response.text
+        assert '<li>ModelStr</li>' in response.text
 
     @pytest.mark.usefixtures("route_setup", "csrf_token")
     def test_delete(self, obj):
