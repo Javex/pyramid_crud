@@ -4,7 +4,7 @@ from pyramid.compat import is_nonstr_iter
 from pyramid.settings import aslist
 from pyramid.interfaces import ISessionFactory
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 
 def parse_options_from_settings(settings, settings_prefix):

@@ -25,5 +25,6 @@ useful if the default global application behavior does not suit you.
    usage/forms
    usage/templates
    usage/util
+   usage/actions
    usage/help
    usage/examples

@@ -43,7 +43,6 @@ is very simple:
 .. automethod:: ViewConfigurator.configure_list_view
 .. automethod:: ViewConfigurator.configure_edit_view
 .. automethod:: ViewConfigurator.configure_new_view
-.. automethod:: ViewConfigurator.configure_delete_view
 
 There are also some :ref:`helper methods <view_configurator_api>` available.
 
@@ -61,7 +60,7 @@ provide a value. The follwoing values are available:
 
 .. _WTForms-Alchemy's Form Customization: https://wtforms-alchemy.readthedocs.org/en/latest/customization.html
 
-``label``
+label
     This is taken over from WTForms-Alchemy but is used in more places. Instead
     of being just used as the label on a form, it is also used as a column
     heading in the list view. Each object should have one, but some functions
@@ -72,16 +71,20 @@ provide a value. The follwoing values are available:
     While you should normally set it, not setting it will invent some hopefully
     nice-looking strings for the default usage (basically list and edit views).
 
-``css_class``
+css_class
     A css class which should be set on this element's context. Currently this
     is only used for the list view where the ``th`` element gets this class so
     you can style your table based on individual columns. See the documentation
     on :ref:`list_display <list_display>` for more info.
 
-``bool``
+bool
     This value is not always set, but when it is set, it indicates if this item
     is a boolean type. Currently this is only set for the list headings and
     there it is unused but can be adapted by custom templates.
+
+func
+    This is only used with actions and defines the callable which executes an
+    action. It is part of the dict returned by ``_all_actions`` on the view.
 
 API
 ---
@@ -102,12 +105,10 @@ The following methods refer to specific views:
 Addtionally, the following helper methods are used internally during several
 sections of the library:
 
-.. automethod:: CRUDView.delete_form
 .. automethod:: CRUDView.redirect
 .. automethod:: CRUDView._get_request_pks
 .. automethod:: CRUDView._get_route_pks
 .. automethod:: CRUDView._edit_route
-.. automethod:: CRUDView._delete_route
 .. automethod:: CRUDView.iter_head_cols
 .. automethod:: CRUDView.iter_list_cols
 

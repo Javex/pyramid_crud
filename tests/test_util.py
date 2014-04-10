@@ -4,22 +4,6 @@ from sqlalchemy.orm import relationship
 import six
 
 
-def test_classproperty():
-
-    class Test(object):
-        val = 0
-
-        @util.classproperty
-        def test(self):
-            return self.val
-
-    assert Test.val == 0
-    assert Test.test == 0
-    Test.val = 7
-    assert Test.val == 7
-    assert Test.test == 7
-
-
 class Test_get_pks(object):
 
     def test_single_pk(self, Model_one_pk):
@@ -71,6 +55,15 @@ def test_meta_property():
     assert TestSubWithout.test == "Meta"
     assert TestSubSubWithout.test == "Meta"
     assert TestSubSubInherit.test == "TestSubSub"
+
+
+def test_meta_property_doc():
+    class Meta(type):
+        @util.meta_property
+        def test(self):
+            "DOC"
+
+    assert Meta.test.__doc__ == "DOC"
 
 
 def test_meta_property_new_meta():

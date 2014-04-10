@@ -15,6 +15,8 @@ bool_item_yes = re.compile(r'<td class="text-success text-center">\s*Yes\s*'
                            '</td>')
 bool_item_no = re.compile(r'<td class="text-danger text-center">\s*No\s*'
                           '</td>')
+bool_item_no_href = re.compile(
+    r'<td class="text-danger text-center">\s*<a.*\s*No\s*</a>\s*</td>')
 text_head = re.compile(r'<th class="column-test_text">\s+Test Text\s+</th>')
 err_required = re.compile(r'<ul>\s*<li>This field is required.</li>\s*</ul>')
 
@@ -28,6 +30,7 @@ def render_factory(template_name, request):
 @pytest.fixture
 def view(pyramid_request, model_factory, form_factory, venusian_init, config,
          DBSession):
+    config.add_static_view('/static/crud', 'pyramid_crud:static')
     pyramid_request.POST = MultiDict()
     pyramid_request.dbsession = DBSession
     Model = model_factory([Column('test_text', String, nullable=False),
@@ -54,7 +57,10 @@ def view(pyramid_request, model_factory, form_factory, venusian_init, config,
 @pytest.fixture
 def render_base(pyramid_request, config):
     # For base we need an inheriting template to avoid recursion
-    tmpl = """<%inherit file="default/base.mako"/>Test Body"""
+    tmpl = """<%inherit file="default/base.mako"/>
+    <%block name="head">HeadTest</%block>
+    <%block name="heading">HeadingTest</%block>
+    Test Body"""
     renderer = config.registry.queryUtility(IRendererFactory, '.mako')
     renderer.lookup.put_string('test.mako', tmpl)
     return render_factory("test.mako", pyramid_request)
@@ -74,6 +80,8 @@ def test_base(render_base, view):
     out = render_base(view=view)
     assert "<title>Models | CRUD</title>" in out
     assert "Test Body" in out
+    assert "HeadingTest" in out
+    assert "HeadTest" in out
 
 
 @pytest.mark.parametrize("queue, class_", [('error', 'danger'),
@@ -107,6 +115,14 @@ def test_list_bool_false(render_list, view):
     view.dbsession.add(obj)
     out = render_list(view=view, **view.list())
     assert bool_item_no.search(out)
+
+
+def test_list_bool_false_link(render_list, view):
+    view.list_display_links = ['test_bool']
+    obj = view.Form.Meta.model(test_bool=False, test_text='Foo')
+    view.dbsession.add(obj)
+    out = render_list(view=view, **view.list())
+    assert bool_item_no_href.search(out)
 
 
 # TODO: Implement a test for when no items exist yet (and add that
@@ -211,6 +227,6 @@ def test_list_display_links(render_list, view):
     view.request.dbsession.flush()
     view.__class__.list_display_links = ('test_text', 'test_bool')
     out = render_list(view=view, **view.list())
-    search_re = r'<a href="http://example.com/test/1">\s*%s\s*</a>'
+    search_re = r'<a href="http://example.com/test/1/edit">\s*%s\s*</a>'
     assert re.search(search_re % 'Testval', out)
     assert re.search(search_re % 'Yes', out)

@@ -1,6 +1,7 @@
 from pyramid_crud import forms
 from webob.multidict import MultiDict
 from wtforms.fields import StringField, IntegerField
+import wtforms
 from sqlalchemy import Column, String, Integer, ForeignKey, inspect
 from sqlalchemy.orm import relationship
 try:
@@ -201,14 +202,14 @@ def formdata_with_inlines(request, form_with_inlines):
     Form = form_with_inlines
     "Prepare formdata to be processed"
     # request.param denotes number of inline forms with data
-    formdata = MultiDict(test_int=1, test_text='parent')
-    form_count = request.param
+    formdata = MultiDict(test_int='1', test_text='parent')
+    form_count = str(request.param)
     for inline_index in range(1, len(Form.inlines) + 1):
         formdata['child%d_count' % inline_index] = form_count
         for item_index in range(request.param):
             int_key = 'child%d_%d_test_int' % (inline_index, item_index)
             text_key = 'child%d_%d_test_text' % (inline_index, item_index)
-            int_val = int('%d%d' % (inline_index, item_index))
+            int_val = '%d%d' % (inline_index, item_index)
             text_val = 'text_child%d_%d' % (inline_index, item_index)
             formdata[int_key] = int_val
             formdata[text_key] = text_val
@@ -302,17 +303,17 @@ class TestNormalModelFormWithInline(object):
         for inline_index, inline in enumerate(form.inlines):
             inline_ref, forms = form.inline_fieldsets[inline.name]
             assert inline_ref is inline
-            assert len(forms) == self.form_count
+            assert len(forms) == int(self.form_count)
             for form_index, (inline_form, is_new) in enumerate(forms):
                 assert is_new is True
                 for field in inline_form:
-                    assert field.data == self.formdata[field.name]
+                    assert str(field.data) == self.formdata[field.name]
 
     def test_process_inline_none(self, form_with_inlines):
         self._parse_fixtures(form_with_inlines)
         form = self.Form()
         form.process_inline()
-        assert len(form.inlines) == self.inline_count
+        assert len(form.inlines) == int(self.inline_count)
         for inline_index, inline in enumerate(form.inlines):
             inline_ref, forms = form.inline_fieldsets[inline.name]
             assert inline_ref is inline
@@ -364,7 +365,7 @@ class TestNormalModelFormWithInline(object):
             child_key = 'child%d' % inline_index
             children = getattr(form.obj, child_key)
             # either number of objs or items in formdata
-            data_count = max(len(children), self.form_count)
+            data_count = max(len(children), int(self.form_count))
             assert data_count == len(forms)
             for child_index, (child, (inline_form, is_new)) in \
                     enumerate(zip(children, forms)):
@@ -375,14 +376,14 @@ class TestNormalModelFormWithInline(object):
                                % (inline_index, child_index))
                     assert inline_form.test_text.name == text_key
                     assert inline_form.test_int.name == int_key
-                    if child_index < self.form_count:
+                    if child_index < int(self.form_count):
                         if child_index <= self.values_on_children_no:
                             assert is_new is False
                         else:
                             assert is_new is True
-                        assert inline_form.test_text.data == \
+                        assert str(inline_form.test_text.data) == \
                             self.formdata[text_key]
-                        assert inline_form.test_int.data == \
+                        assert str(inline_form.test_int.data) == \
                             self.formdata[int_key]
                     elif child_index <= self.values_on_children_no:
                         assert is_new is False
@@ -444,7 +445,7 @@ class TestNormalModelFormWithInline(object):
                                            _basic_form_with_inline):
         ParentForm, ChildForm = _basic_form_with_inline
         ChildForm.extra = 3
-        formdata = MultiDict(child_count=5)
+        formdata = MultiDict(child_count="5")
         form = ParentForm(formdata)
         assert len(form.inline_fieldsets) == 1
         inline, forms = form.inline_fieldsets['child']
@@ -461,7 +462,7 @@ class TestNormalModelFormWithInline(object):
         ChildForm.extra = 3
         parent = ParentForm.Meta.model()
         parent.children.append(ChildForm.Meta.model(test_text='TestValue'))
-        formdata = MultiDict(child_count=5)
+        formdata = MultiDict(child_count="5")
 
         form = ParentForm(formdata, parent)
         assert len(form.inline_fieldsets) == 1
@@ -487,7 +488,7 @@ class TestNormalModelFormWithInline(object):
         DBSession.flush()
         child0_id = parent.children[0].id
         child1_id = parent.children[1].id
-        formdata = MultiDict(child_count=2,
+        formdata = MultiDict(child_count="2",
                              delete_child_0=True, child_0_id=child0_id,
                              delete_child_1=True, child_1_id=child1_id)
         assert len(parent.children) == 2
@@ -504,7 +505,8 @@ class TestNormalModelFormWithInline(object):
         parent = ParentForm.Meta.model()
         DBSession.add(parent)
         DBSession.flush()
-        formdata = MultiDict(child_count=1, delete_child_0=True, child_0_id=1)
+        formdata = MultiDict(child_count="1", delete_child_0='y',
+                             child_0_id='1')
         assert len(parent.children) == 0
         with pytest.raises(LookupError):
             ParentForm(formdata, parent)
@@ -512,14 +514,14 @@ class TestNormalModelFormWithInline(object):
     def test_process_inline_delete_extra_field(
             self, _basic_form_with_inline):
         ParentForm, ChildForm = _basic_form_with_inline
-        formdata = MultiDict(child_count=1, delete_child_0=True)
+        formdata = MultiDict(child_count='1', delete_child_0='y')
         form = ParentForm(formdata)
         assert len(form.inline_fieldsets) == 1
         inline, forms = form.inline_fieldsets['child']
         assert inline is ChildForm
         assert len(forms) == 0
 
-        formdata = MultiDict(child_count=1)
+        formdata = MultiDict(child_count='1')
         form = ParentForm(formdata)
         assert len(form.inline_fieldsets) == 1
         inline, forms = form.inline_fieldsets['child']
@@ -550,8 +552,8 @@ class TestNormalModelFormWithInline(object):
         assert parent.id is not None
         assert child.id is not None
         assert child.parent_id is not None
-        formdata = MultiDict(child_count=1, child_0_test_text='EditVal',
-                             child_0_id=child.id)
+        formdata = MultiDict(child_count='1', child_0_test_text='EditVal',
+                             child_0_id=str(child.id))
         form = ParentForm(formdata, parent)
         assert len(form.inline_fieldsets) == 1
         inline, forms = form.inline_fieldsets['child']
@@ -574,7 +576,7 @@ class TestNormalModelFormWithInline(object):
         DBSession.add(parent)
         DBSession.flush()
         assert parent.id is not None
-        formdata = MultiDict(child_count=1, child_0_test_text='NewVal')
+        formdata = MultiDict(child_count='1', child_0_test_text='NewVal')
         form = ParentForm(formdata, parent)
         assert len(form.inline_fieldsets) == 1
         inline, forms = form.inline_fieldsets['child']
@@ -599,8 +601,8 @@ class TestNormalModelFormWithInline(object):
         DBSession.add(parent)
         DBSession.flush()
         assert parent.id is not None
-        formdata = MultiDict(child_count=1, child_0_test_text='NewVal',
-                             child_0_id=child.id)
+        formdata = MultiDict(child_count='1', child_0_test_text='NewVal',
+                             child_0_id=str(child.id))
         form = ParentForm(formdata, parent)
         assert len(form.inline_fieldsets) == 1
         inline, forms = form.inline_fieldsets['child']
@@ -629,7 +631,7 @@ class TestAnyModelForm(object):
             'test_int': IntegerField(),
         }
         self.form = form_factory(fields=fields, base=any_form)
-        self.formdata = MultiDict(test_text='Test123', test_int=17)
+        self.formdata = MultiDict(test_text='Test123', test_int='17')
         cols = [
             Column('id', Integer, primary_key=True),
             Column('test_text', String),
@@ -640,7 +642,7 @@ class TestAnyModelForm(object):
     def test_init(self):
         form = self.form(self.formdata)
         for key, value in self.formdata.items():
-            assert getattr(form, key).data == value
+            assert str(getattr(form, key).data) == value
 
     def test_init_obj_only(self):
         obj = self.obj(**self.formdata)
@@ -652,7 +654,7 @@ class TestAnyModelForm(object):
         obj = self.obj(test_text='ABC', test_int=3)
         form = self.form(self.formdata, obj)
         for key, value in self.formdata.items():
-            assert getattr(form, key).data == value
+            assert str(getattr(form, key).data) == value
 
     def test_init_form_one_val(self):
         obj = self.obj(**self.formdata)
@@ -746,7 +748,169 @@ class TestAnyModelForm(object):
         assert Form(obj=Model()).primary_keys == [('id', None)]
 
 
+def test_get_session_missing(model_factory, form_factory, any_form):
+    cols = [
+        Column('test_unique', String, unique=True)
+    ]
+    model = model_factory(cols)
+    with pytest.raises(Exception):
+        form_factory(base=any_form, model=model)
+
+
+def test_get_session(model_factory, form_factory, any_form,
+                     DBSession):
+    cols = [
+        Column('test_unique', String, unique=True)
+    ]
+    model = model_factory(cols)
+
+    @classmethod
+    def get_session(cls):
+        return DBSession
+    fields = {
+        'get_session': get_session
+    }
+    form = form_factory(fields, base=any_form, model=model)
+    assert form.get_session() == DBSession
+
+
 # Tests for all forms that inherit from BaseInLine
 class TestInlineModelForm(object):
     # TODO: test pks_from_formdata
     pass
+
+
+class TestCSRFForm(object):
+
+    @pytest.fixture(autouse=True)
+    def _prepare(self, pyramid_request, csrf_token):
+        self.request = pyramid_request
+        self.token = csrf_token
+
+        class CSRFSub(forms.CSRFForm):
+            pass
+        self.Form = CSRFSub
+        self.form = self.Form(csrf_context=self.request)
+
+    def test_generate_csrf_token(self):
+        assert self.form.generate_csrf_token(self.request) == self.token
+
+    def test_token_field(self):
+        assert self.form.csrf_token._value() == self.token
+
+    def test_validate(self):
+        formdata = MultiDict()
+        formdata['csrf_token'] = self.token
+        form = self.Form(formdata, csrf_context=self.request)
+        assert form.validate()
+
+    def test_validate_fail(self):
+        formdata = MultiDict()
+        formdata['csrf_token'] = 'WRONG'
+        self.request.client_addr = ''
+        form = self.Form(formdata, csrf_context=self.request)
+        with patch('pyramid_crud.forms.log') as mock:
+            assert not form.validate()
+            assert mock.warn.call_count == 1
+
+
+class TestMultiField(object):
+
+    @pytest.fixture(autouse=True, params=[forms.MultiCheckboxField,
+                                          forms.MultiHiddenField])
+    def _prepare(self, request):
+        class Form(wtforms.Form):
+            items = request.param(choices=[('1', '1'), ('2', '2')])
+        self.Form = Form
+
+    def test_one_value(self):
+        formdata = MultiDict()
+        formdata['items'] = '1'
+        form = self.Form(formdata)
+        assert form.items.data == ['1']
+        assert form.validate()
+
+    def test_multiple_values(self):
+        formdata = MultiDict()
+        formdata.add('items', '1')
+        formdata.add('items', '2')
+        form = self.Form(formdata)
+        assert form.items.data == ['1', '2']
+        assert form.validate()
+
+    def test_no_value(self):
+        formdata = MultiDict()
+        form = self.Form(formdata)
+        assert not form.items.data
+        assert form.validate()
+
+    def test_invalid_choice(self):
+        formdata = MultiDict()
+        formdata['items'] = '3'
+        form = self.Form(formdata)
+        assert not form.validate()
+        [err_msg] = form.errors['items']
+        assert 'items does not exist anymore' in err_msg
+
+
+class TestMultiCheckboxField(object):
+
+    @pytest.fixture(autouse=True)
+    def _prepare(self):
+        class Form(wtforms.Form):
+            items = forms.MultiCheckboxField(choices=[('1', ''), ('2', '')])
+        self.Form = Form
+
+    def test_output(self):
+        form = self.Form()
+        for index, item in enumerate(form.items, 1):
+            expected = ('<input id="items-%d" name="items" type="checkbox" '
+                        'value="%d">' % (index-1, index))
+            assert str(item) == expected
+
+
+class TestMultiHiddenField(object):
+
+    @pytest.fixture(autouse=True)
+    def _prepare(self):
+        class Form(wtforms.Form):
+            items = forms.MultiHiddenField(choices=[('1', ''), ('2', '')])
+        self.Form = Form
+
+    def test_output(self):
+        form = self.Form()
+        for index, item in enumerate(form.items, 1):
+            expected = ('<input id="items-%d" name="items" type="hidden" '
+                        'value="%d">' % (index-1, index))
+            assert str(item) == expected
+
+
+def test_select_field():
+    class Form(wtforms.Form):
+        select = forms.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
+    formdata = MultiDict()
+    formdata['select'] = '1'
+    form = Form(formdata)
+    assert form.validate()
+
+
+def test_select_field_invalid_choice():
+    class Form(wtforms.Form):
+        select = forms.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
+    formdata = MultiDict()
+    formdata['select'] = '2'
+    form = Form()
+    assert not form.validate()
+    [err_msg] = form.errors['select']
+    assert 'select an action' in err_msg
+
+
+def test_select_field_empty_choice():
+    class Form(wtforms.Form):
+        select = forms.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
+    formdata = MultiDict()
+    formdata['select'] = ''
+    form = Form(formdata)
+    assert not form.validate()
+    [err_msg] = form.errors['select']
+    assert 'select an action' in err_msg

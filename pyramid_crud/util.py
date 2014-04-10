@@ -22,21 +22,6 @@ def get_pks(model):
     return pk_attributes
 
 
-class classproperty(object):
-    """
-    A decorator to turn a method into a property on a class. Behaves the same
-    as a :cls:`property` only for classes instead of instances. Only supports
-    the get part.
-    """
-
-    def __init__(self, getter):
-        self.getter = getter
-        self.__doc__ = getter.__doc__
-
-    def __get__(self, instance, owner):
-        return self.getter(owner)
-
-
 class meta_property(object):
     """
     A non-data-descriptor, that behaves like :class:`property` except that it
@@ -76,7 +61,7 @@ class meta_property(object):
     """
     def __init__(self, fget):
         self.fget = fget
-        if hasattr(fget, '__doc__'):
+        if hasattr(fget, '__doc__') and fget.__doc__:
             self.__doc__ = fget.__doc__
 
     def __get__(self, obj, type_):

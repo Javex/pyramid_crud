@@ -1,11 +1,14 @@
 from pyramid.httpexceptions import HTTPFound
+from pyramid.decorator import reify
+from pyramid.renderers import render_to_response
 import venusian
 import six
 import logging
-from functools import partial
 from .util import get_pks
-from .forms import ButtonForm
-from sqlalchemy import inspect
+from traceback import format_exc
+from .forms import CSRFForm, MultiCheckboxField, SelectField, MultiHiddenField
+from wtforms.fields import SubmitField, HiddenField
+from wtforms.validators import InputRequired
 import sqlalchemy
 try:
     from collections import OrderedDict
@@ -194,27 +197,18 @@ class ViewConfigurator(object):
         configured route that links route and view. This will then be
         stored in the view's ``route`` dictionary under the "list" key.
 
-        The default implementation of :meth:`CRUDView.list` only expects to be
-        run on a GET request and as such no POST data is expected. For a clean
-        configuration, you should make sure that only GET requests reach it
-        by passing ``request_method='GET'`` to ``add_view``.
-
-        A very simple example implementation might look like this:
-
         .. code-block:: python
 
             def configure_list_view(self):
                 self.config.add_view('myview-list',
-                                     renderer='default/list.mako',
-                                     request_method='GET')
+                                     renderer='default/list.mako',)
                 self.config.add_route('myview-list', self.view_class.url_path)
                 return 'myview-list'
 
         This does a few things:
 
         * It sets up the view under the alias ``myview-list`` with the template
-          ``default/list.mako`` (the standard list template) and sets the
-          request method to ``GET`` (as noted above).
+          ``default/list.mako`` (the standard list template).
 
         * It connects the alias to the configured route via the
           :ref:`url_path <url_path>` configuration parameter (the list view is
@@ -223,8 +217,7 @@ class ViewConfigurator(object):
         * It returns this alias from the function so that it can be stored in
           the ``routes`` dictionary on the view.
         """
-        self._configure_view('list', request_method='GET',
-                             renderer=self._template_for('list'))
+        self._configure_view('list', renderer=self._template_for('list'))
         return self._configure_route('list', '')
 
     def configure_edit_view(self):
@@ -236,7 +229,8 @@ class ViewConfigurator(object):
         "edit" key.
         """
         self._configure_view('edit', renderer=self._template_for('edit'))
-        return self._configure_route('edit', '/%s' % self._get_route_pks())
+        return self._configure_route('edit',
+                                     '/%s/edit' % self._get_route_pks())
 
     def configure_new_view(self):
         """
@@ -249,18 +243,6 @@ class ViewConfigurator(object):
         self._configure_view('edit', 'new',
                              renderer=self._template_for('edit'))
         return self._configure_route('new', '/new')
-
-    def configure_delete_view(self):
-        """
-        This method behaves exactly like
-        :meth:`ViewConfigurator.configure_list_view` except it must configure
-        the delete view, i.e. the view for deleting an object. It must
-        return the name of the route as well that will then be stored under the
-        "delete" key.
-        """
-        self._configure_view('delete', request_method='POST')
-        return self._configure_route('delete',
-                                     '/%s/delete' % self._get_route_pks())
 
 
 class CRUDCreator(type):
@@ -276,13 +258,11 @@ class CRUDCreator(type):
             list_route = configurator.configure_list_view()
             edit_route = configurator.configure_edit_view()
             new_route = configurator.configure_new_view()
-            delete_route = configurator.configure_delete_view()
 
             cls.routes = {
                 'list': list_route,
                 'edit': edit_route,
                 'new': new_route,
-                'delete': delete_route,
             }
         if '__abstract__' not in attrs:
             have_attrs = set(attrs)
@@ -295,6 +275,9 @@ class CRUDCreator(type):
                     "configuration : %s" % ", ".join(missing))
             if cls.view_configurator is not None:
                 info = venusian.attach(cls, cb)
+
+            # Initialize mutable defaults
+            cls.actions = []
 
 
 @six.add_metaclass(CRUDCreator)
@@ -460,6 +443,12 @@ class CRUDView(object):
         This configuration will turn the columns ``column1`` and ``column3``
         into links.
 
+    .. _actions_cfg:
+
+    actions:
+        An optional list of action callables or view method names for the
+        dropdown menu. See :ref:`actions` for details on how to use it.
+
     template_dir
         The directory where to find templates. The default
         templates are provided in the ``default`` folder. This is used
@@ -483,20 +472,6 @@ class CRUDView(object):
 
             Implement / Test / Document better
 
-    button_form
-        The form which to use for button actions that should be
-        protected by CSRF. Normally, this does not need to be overridden,
-        except if a change in those button-only forms such as the delete button
-        in the list view is desired. Contrary to a Link this is a necessity to
-        prevent CSRF attacks.
-
-    delete_form_factory
-        A callable which creates a delete form suitable
-        for being displayed as a button to delete an item. By default this is
-        based on the ``button_form`` attribute and additionally to all
-        typical arguments being accepted, it sets the button value to
-        ``Delete``.
-
     .. _view_configurator_cfg:
 
     view_configurator
@@ -507,7 +482,9 @@ class CRUDView(object):
         parameter. See the documentation on :class:`ViewConfigurator` for
         details on how to achieve that.
 
-    There are also some attributes which you can access.
+    There are also some attributes which you can access. All of them are
+    available on the instance, but only some are also available on the class
+    (in this case, it is noted on the attribute).
 
     routes
         A dictionary mapping action names to routes. Action names are such as
@@ -522,31 +499,51 @@ class CRUDView(object):
 
         The routes dictionary is populated by the
         :ref:`view_configurator <view_configurator_cfg>`.
+
+        This can be accessed at the class and instance level.
+
+    request
+        The current request, an instance of :class:`pyramid.request.Request`.
     """
     __abstract__ = True
     template_dir = 'default'
     template_ext = '.mako'
     template_base_name = 'base'
-    button_form = ButtonForm
-    delete_form_factory = partial(ButtonForm, title='Delete')
     view_configurator = ViewConfigurator
 
     def __init__(self, request):
         self.request = request
-        self._delete_form = None
+        self._action_form = None
 
-    def delete_form(self):
-        """
-        Get the delete form instance, creating a new one if there is none yet.
-        This will always return the same instance after multiple calls. This
-        shouldn't lead to problems even when the same instance is used for
-        multiple elements (like in a list display) since only a button and
-        the CSRF hidden field exist on it.
-        """
-        if self._delete_form is None:
-            self._delete_form = self.delete_form_factory(
-                self.request.POST, csrf_context=self.request)
-        return self._delete_form
+    def _get_item_choices(self):
+        pks = get_pks(self.Form.Meta.model)
+        if len(pks) != 1:
+            raise ValueError("Can only handle a single primary key")
+        [pk] = pks
+
+        cb_choices = []
+        for item in self.get_list_query():
+            cb_choices.append((str(getattr(item, pk)), ''))
+        return cb_choices
+
+    def get_action_form(self):
+        if self._action_form is None:
+            action_choices = [('', '--- Select Action ---')]
+            action_choices += [(name, info['label'])
+                               for name, info in self._all_actions.items()]
+
+            req_validator = InputRequired('You must select at least one '
+                                          'item')
+            cb_choices = self._get_item_choices()
+
+            class ActionForm(CSRFForm):
+                action = SelectField('Action:', choices=action_choices)
+                items = MultiCheckboxField(choices=cb_choices,
+                                           validators=[req_validator])
+                submit = SubmitField("Execute")
+
+            self._action_form = ActionForm
+        return self._action_form
 
     @property
     def dbsession(self):
@@ -555,6 +552,66 @@ class CRUDView(object):
     @property
     def list_display(self):
         return ('__str__',)
+
+    @reify
+    def _all_actions(self):
+        """
+        Get a list of all actions, including default ones.
+        """
+        all_actions = OrderedDict()
+        for action in [self.delete] + self.actions:
+            if not callable(action):
+                action = getattr(self, action)
+            info = dict(getattr(action, "info", {}))
+            info["func"] = action
+            if "label" not in info:
+                info["label"] = action.__name__.replace("_", " ").title()
+            all_actions[action.__name__] = info
+        return all_actions
+
+    def delete(self, query):
+        """
+        Delete all objects in the ``query``.
+        """
+        try:
+            req_validator = InputRequired('You must select at least one '
+                                          'item')
+
+            class ConfirmationForm(CSRFForm):
+                action = HiddenField()
+                confirm_delete = SubmitField('Delete')
+                items = MultiHiddenField(choices=self._get_item_choices(),
+                                         validators=[req_validator])
+            form = ConfirmationForm(self.request.POST,
+                                    csrf_context=self.request)
+            items = query.all()
+            if 'confirm_delete' in self.request.POST:
+                if not form.validate():
+                    # Likely CSRF or other fiddling, don't bother checking
+                    raise Exception
+
+                item_count = len(items)
+                for item in items:
+                    self.dbsession.delete(item)
+                self.dbsession.flush()
+                if item_count == 1:
+                    title = self.Form.title
+                else:
+                    title = self.Form.title_plural
+                message = "%d %s deleted!" % (item_count, title)
+                self.request.session.flash(message)
+                return True, None
+            else:
+                data = {'items': items, 'view': self, 'form': form}
+                response = render_to_response('default/delete_confirm.mako',
+                                              data, request=self.request)
+                return True, response
+        except Exception:
+            log.warning("Deletion of items failed:\n%s" % format_exc())
+            self.request.session.flash('There was an error deleting the '
+                                       'item(s)', 'error')
+            return False, None
+    delete.info = {'label': 'Delete'}
 
     # Misc helper stuff
 
@@ -628,15 +685,7 @@ class CRUDView(object):
 
     def _edit_route(self, obj):
         """
-        Get a route for the edit action. Behaves the same as
-        :meth:`_delete_route`.
-        """
-        kw = self._get_route_pks(obj)
-        return self.request.route_url(self.routes['edit'], **kw)
-
-    def _delete_route(self, obj):
-        """
-        Get a route for the delete action based on the primary keys.
+        Get a route for the edit action based on an objects primary keys.
 
         :param obj: The instance of a model on which the routes values should
             be based.
@@ -645,7 +694,7 @@ class CRUDView(object):
             displaying the URL on the page.
         """
         kw = self._get_route_pks(obj)
-        return self.request.route_url(self.routes['delete'], **kw)
+        return self.request.route_url(self.routes['edit'], **kw)
 
     # Template helper functions
 
@@ -699,13 +748,18 @@ class CRUDView(object):
                     col = getattr(obj, col)
                     if callable(col):
                         col = col()
-                elif hasattr(self, col):
+                # column on view
+                else:
                     col = getattr(self, col)
                     if callable(col):
                         col = col(obj)
-            elif callable(col):
+            # must be a separate callable
+            else:
                 col = col(obj)
             yield title, col
+
+    def get_list_query(self):
+        return self.dbsession.query(self.Form.Meta.model)
 
     # Actual admin views
 
@@ -718,47 +772,40 @@ class CRUDView(object):
         :return: A dict with a single key ``items`` that is a query which when
             iterating over yields all items to be listed.
         """
-        query = self.dbsession.query(self.Form.Meta.model)
-        return {'items': query}
+        ActionForm = self.get_action_form()
+        action_form = ActionForm(self.request.POST, csrf_context=self.request)
+        items = self.get_list_query()
+        retparams = {'items': items, 'action_form': action_form}
 
-    def delete(self):
-        """
-        Delete an item. This is the default method for handling deletion and
-        can be overridden by subclasses. It only accepts POST request. It has
-        no template attached and instead always returns a redirect.
+        if self.request.method == 'POST':
+            redirect = self.redirect(self.routes['list'])
+            Model = self.Form.Meta.model
+            pk_names = get_pks(Model)
+            if len(pk_names) != 1:  # pragma: no cover (covered above already)
+                raise ValueError("Only single primary keys supported right "
+                                 "now")
+            pk = getattr(Model, pk_names[0])
+            value_list = action_form.items.data
+            if not action_form.validate():
+                flash = self.request.session.flash
+                if 'csrf_token' not in action_form.errors:
+                    if 'items' in action_form.errors:
+                        for msg in action_form.errors['items']:
+                            flash(msg, 'error')
 
-        This method requires the ``matchdict`` to contain the primary keys in
-        the same manner described in :meth:`.edit`.
+                    if 'action' in action_form.errors:
+                        for msg in action_form.errors['action']:
+                            flash(msg, 'error')
+                return retparams
 
-        :return: An instance of :class:`.HTTPFound` to redirect the user,
-            either deletion was successful or an error has happened.
-        """
-        assert self.request.method == 'POST'
-
-        redirect = self.redirect(self.routes['list'])
-        Model = self.Form.Meta.model
-        try:
-            pks = self._get_request_pks()
-            if pks is None:
-                raise ValueError("Need primary keys for deletion")
-        except ValueError as exc:
-            log.info("Invalid Request for primary keys: %s threw exception %s"
-                     % (self.request.matchdict, exc))
-            self.request.session.flash("Invalid URL", 'error')
-            raise redirect
-
-        if not self.delete_form().validate():
-            self.request.session.flash("Delete failed.", 'error')
-            raise redirect
-
-        obj = self.dbsession.query(Model).get(tuple(pks.values()))
-        if obj is not None:
-            self.dbsession.delete(obj)
-            self.request.session.flash("%s deleted!" % self.Form.title)
-            return redirect
-        else:
-            self.request.session.flash("%s not found!" % self.Form.title, 'error')
-            raise redirect
+            action = self._all_actions[action_form.action.data]
+            query = self.dbsession.query(Model).filter(pk.in_(value_list))
+            success, response = action["func"](query)
+            if success:
+                return response or redirect
+            else:
+                raise response or redirect
+        return retparams
 
     def edit(self):
         """

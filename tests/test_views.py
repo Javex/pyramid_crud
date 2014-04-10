@@ -1,14 +1,19 @@
 from pyramid.httpexceptions import HTTPFound
+from pyramid.response import Response
 from pyramid_crud.views import CRUDView, ViewConfigurator
 from pyramid_crud import forms
 from sqlalchemy import Column, String, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from webob.multidict import MultiDict
+import pytest
 try:
     from unittest.mock import MagicMock, patch
 except ImportError:
     from mock import MagicMock, patch
-import pytest
+try:
+    from collections import OrderedDict
+except ImportError:  # pragma: no cover
+    from ordereddict import OrderedDict
 
 # TODO: Test with multiple PK
 
@@ -17,17 +22,9 @@ import pytest
 def route_setup(config):
     basename = 'tests.test_views.MyView.'
     config.add_route(basename + "list", '/test')
-    config.add_route(basename + "edit", '/test/{id}')
-    config.add_route(basename + "delete", '/test/delete/{id}')
+    config.add_route(basename + "edit", '/test/{id}/edit')
     config.add_route(basename + "new", '/test/new')
     config.commit()
-
-
-@pytest.fixture
-def csrf_token(session, pyramid_request):
-    session.get_csrf_token.return_value = 'ABCD'
-    token = pyramid_request.session.get_csrf_token()
-    pyramid_request.POST['csrf_token'] = token
 
 
 class TestCRUDView(object):
@@ -62,7 +59,6 @@ class TestCRUDView(object):
         self.View = type('MyView', (CRUDView,), view_attrs)
         self.View.routes = {
             'list': 'tests.test_views.MyView.list',
-            'delete': 'tests.test_views.MyView.delete',
             'edit': 'tests.test_views.MyView.edit',
             'new': 'tests.test_views.MyView.new',
         }
@@ -85,6 +81,61 @@ class TestCRUDView(object):
         ChildModel = model_factory(cols, 'Child', relationships=rels)
         ChildForm = form_factory(model=ChildModel, base=forms.CSRFModelForm)
         return ChildForm
+
+    @pytest.fixture(params=['str', 'callable'])
+    def make_action(self, request):
+        def create_action(with_info=True):
+            def test_action(view, query):
+                pass
+            if with_info:
+                test_action.info = {
+                    'label': "Test Action"
+                }
+            if request.param == 'str':
+                self.View.actions = ['test_action']
+                self.View.test_action = test_action
+                return self.view.test_action
+            else:
+                self.View.actions = [test_action]
+                return test_action
+        return create_action
+
+    def test_actions_default(self):
+        assert self.View.actions == []
+
+    def test_all_actions_default(self):
+        expected = OrderedDict()
+        expected['delete'] = {
+            'func': self.view.delete,
+            'label': 'Delete',
+        }
+        assert self.view._all_actions == expected
+
+    def test_all_actions(self, make_action):
+        action = make_action()
+        expected = OrderedDict()
+        expected['delete'] = {
+            'func': self.view.delete,
+            'label': 'Delete',
+        }
+        expected['test_action'] = {
+            'func': action,
+            'label': 'Test Action',
+        }
+        assert self.view._all_actions == expected
+
+    def test_all_actions_no_info(self, make_action):
+        action = make_action(False)
+        expected = OrderedDict()
+        expected['delete'] = {
+            'func': self.view.delete,
+            'label': 'Delete',
+        }
+        expected['test_action'] = {
+            'func': action,
+            'label': 'Test Action',
+        }
+        assert self.view._all_actions == expected
 
     def test_list_display(self):
         [default] = self.view.list_display
@@ -194,6 +245,14 @@ class TestCRUDView(object):
         cols = list(self.view.iter_list_cols(obj))
         assert cols == [('upper', 'TEST')]
 
+    def test_iter_list_cols_view_attr(self, obj):
+        class A(object):
+            pass
+        self.View.upper = A()
+        self.View.list_display = ('upper',)
+        cols = list(self.view.iter_list_cols(obj))
+        assert cols == [('upper', self.View.upper)]
+
     def test_template_dir(self):
         assert self.view.template_dir == 'default'
 
@@ -203,18 +262,30 @@ class TestCRUDView(object):
     def test_template_base_name(self):
         assert self.view.template_base_name == 'base'
 
-    def test_button_form(self):
-        assert self.view.button_form is forms.ButtonForm
+    def test_get_action_form(self):
+        Form = self.view.get_action_form()
+        form = Form(self.request.POST, csrf_context=self.request)
+        assert isinstance(form, forms.CSRFForm)
+        assert len(form.action.choices) == 2
+        assert len(form.items.choices) == 0
 
-    def test_delete_form_factory(self):
-        form = self.view.delete_form_factory(self.request.POST,
-                                             csrf_context=self.request)
-        assert isinstance(form, forms.ButtonForm)
+    def test_get_action_form_obj(self, obj):
+        Form = self.view.get_action_form()
+        form = Form(self.request.POST, csrf_context=self.request)
+        assert len(form.action.choices) == 2
+        assert len(form.items.choices) == 1
+        assert form.items.choices[0][0] == str(obj.id)
 
-    def test_delete_form(self):
-        assert self.view._delete_form is None
-        assert isinstance(self.view.delete_form(), forms.ButtonForm)
-        assert isinstance(self.view._delete_form, forms.ButtonForm)
+    def test_get_action_form_multiple_pk(self):
+        with patch('pyramid_crud.views.get_pks') as mock:
+            mock.return_value = range(2)
+            with pytest.raises(ValueError):
+                self.view.get_action_form()
+
+    def test_get_action_form_cached(self):
+        form = self.view.get_action_form()
+        assert form is self.view.get_action_form()
+        assert self.view._action_form is form
 
     @pytest.mark.usefixtures("route_setup")
     def test_redirect(self):
@@ -239,14 +310,9 @@ class TestCRUDView(object):
             self.view._get_route_pks(obj)
 
     @pytest.mark.usefixtures("route_setup")
-    def test__delete_route(self, obj):
-        route = self.view._delete_route(obj)
-        assert route == "http://example.com/test/delete/%d" % obj.id
-
-    @pytest.mark.usefixtures("route_setup")
     def test__edit_route(self, obj):
         route = self.view._edit_route(obj)
-        assert route == "http://example.com/test/%d" % obj.id
+        assert route == "http://example.com/test/%d/edit" % obj.id
 
     def test__get_request_pks(self):
         self.request.matchdict['id'] = 4
@@ -265,59 +331,141 @@ class TestCRUDView(object):
 
     def test_list_empty(self):
         data = self.view.list()
-        assert len(data) == 1
+        assert len(data) == 2
         query = data['items']
         assert list(query) == []
+        action_form = data['action_form']
+        assert len(action_form.items.choices) == 0
 
     def test_list_obj(self, obj):
         data = self.view.list()
-        assert len(data) == 1
+        assert len(data) == 2
         query = data['items']
         items = list(query)
         assert len(items) == 1
         item = items[0]
         assert item == obj
 
+        action_form = data['action_form']
+        assert len(action_form.items.choices) == 1
+
+    @pytest.fixture
+    def delete_confirm(self, config):
+        config.include('pyramid_mako')
+        config.include('pyramid_crud')
+        config.commit()
+
+    @pytest.mark.usefixtures("route_setup", "csrf_token", "template_setup")
+    def test_delete_confirm(self, obj):
+        self.request.method = 'POST'
+        self.request.POST['action'] = 'delete'
+        self.request.POST['items'] = str(obj.id)
+        response = self.view.list()
+        assert isinstance(response, Response)
+        assert 'Are you sure you want to delete' in response.body
+        assert '<li>ModelStr</li>' in response.body
+
     @pytest.mark.usefixtures("route_setup", "csrf_token")
     def test_delete(self, obj):
         self.request.method = 'POST'
-        self.request.matchdict['id'] = obj.id
-        redirect = self.view.delete()
+        self.request.POST['action'] = 'delete'
+        self.request.POST['confirm_delete'] = 'something'
+        self.request.POST['items'] = str(obj.id)
+        redirect = self.view.list()
         assert isinstance(redirect, HTTPFound)
         flash = self.request.session.flash
-        flash.assert_called_once_with('Model deleted!')
-
-    def test_delete_wrong_method(self):
-        self.request.method = 'GET'
-        with pytest.raises(AssertionError):
-            self.view.delete()
+        flash.assert_called_once_with('1 Model deleted!')
 
     @pytest.mark.usefixtures("route_setup", "csrf_token")
-    def test_delete_not_found(self):
+    def test_delete_invalid_token(self, obj):
         self.request.method = 'POST'
-        self.request.matchdict['id'] = 1
-        with pytest.raises(HTTPFound):
-            self.view.delete()
+        self.request.POST['action'] = 'delete'
+        self.request.POST['confirm_delete'] = 'something'
+        self.request.POST['items'] = str(obj.id)
+        self.request.POST['csrf_token'] = 'WRONG'
+        assert self.view.delete(MagicMock()) == (False, None)
         flash = self.request.session.flash
-        flash.assert_called_once_with('Model not found!', 'error')
+        flash.assert_called_once_with('There was an error deleting the '
+                                      'item(s)', 'error')
 
-    @pytest.mark.usefixtures("route_setup", "session")
-    def test_delete_missing_pks(self):
+    @pytest.mark.usefixtures("route_setup", "csrf_token")
+    def test_delete_multiple(self, obj):
+        obj2 = self.Model()
+        self.session.add(obj2)
+        self.session.flush()
         self.request.method = 'POST'
-        with pytest.raises(HTTPFound):
-            self.view.delete()
+        self.request.POST['action'] = 'delete'
+        self.request.POST['confirm_delete'] = 'something'
+        self.request.POST['items'] = str(obj.id)
+        self.request.POST.add('items', str(obj2.id))
+        redirect = self.view.list()
+        assert isinstance(redirect, HTTPFound)
         flash = self.request.session.flash
-        flash.assert_called_once_with('Invalid URL', 'error')
+        flash.assert_called_once_with('2 Models deleted!')
+
+    @pytest.mark.usefixtures("route_setup", "csrf_token")
+    def test_delete_fail(self, obj):
+        self.request.method = 'POST'
+        self.request.POST['action'] = 'delete'
+        self.request.POST['confirm_delete'] = 'something'
+        self.request.POST['items'] = str(obj.id)
+        self.session.delete = MagicMock()
+        self.session.delete.side_effect = Exception()
+        with pytest.raises(HTTPFound):
+            self.view.list()
+        flash = self.request.session.flash
+        flash.assert_called_once_with('There was an error deleting the '
+                                      'item(s)', 'error')
+
+    @pytest.mark.usefixtures("route_setup", "csrf_token")
+    def test_action_obj_not_found(self):
+        self.request.method = 'POST'
+        self.request.POST['action'] = 'delete'
+        self.request.POST['items'] = '1'
+        retparams = self.view.list()
+        assert retparams['action_form'].errors
+        flash = self.request.session.flash
+        flash.assert_called_once_with('One of the selected items does not '
+                                      'exist anymore. It has probably been '
+                                      'deleted.', 'error')
+
+    @pytest.mark.usefixtures("route_setup", "csrf_token")
+    def test_action_missing_pks(self):
+        self.request.method = 'POST'
+        self.request.POST['action'] = 'delete'
+        retparams = self.view.list()
+        assert retparams['action_form'].errors
+        flash = self.request.session.flash
+        flash.assert_called_once_with('You must select at least one item',
+                                      'error')
 
     @pytest.mark.usefixtures("csrf_token", "route_setup")
-    def test_delete_wrong_token(self):
+    def test_action_wrong_token(self):
         self.request.method = 'POST'
-        self.request.matchdict['id'] = 1
         self.request.POST['csrf_token'] = 'WRONG'
-        with pytest.raises(HTTPFound):
-            self.view.delete()
+        retparams = self.view.list()
+        assert retparams['action_form'].errors
         flash = self.request.session.flash
-        flash.assert_called_once_with('Delete failed.', 'error')
+        assert len(flash.call_args_list) == 0
+
+    @pytest.mark.usefixtures("csrf_token", "route_setup")
+    def test_action_missing_action(self, obj):
+        self.request.method = 'POST'
+        self.request.POST['items'] = str(obj.id)
+        retparams = self.view.list()
+        assert retparams['action_form'].errors
+        flash = self.request.session.flash
+        flash.assert_called_once_with('Please select an action to be '
+                                      'executed.', 'error')
+
+    @pytest.mark.usefixtures("csrf_token", "route_setup")
+    def test_action_multiple_pks(self, obj):
+        self.request.method = 'POST'
+        self.request.POST['items'] = str(obj.id)
+        with patch('pyramid_crud.views.get_pks') as mock:
+            mock.return_value = range(2)
+            with pytest.raises(ValueError):
+                self.view.list()
 
     @pytest.mark.usefixtures("csrf_token")
     @pytest.mark.parametrize("is_new", [True, False])
@@ -384,12 +532,12 @@ class TestCRUDView(object):
 
     def test_edit_save(self, edit_run_factory):
         location, obj = edit_run_factory('save')
-        assert location == 'http://example.com/test/%d' % obj.id
+        assert location == 'http://example.com/test/%d/edit' % obj.id
 
     def test_edit_save_no_value(self, obj, edit_run_factory):
         obj.test_text = 'Foo'
         location, obj = edit_run_factory('save', None)
-        assert location == 'http://example.com/test/%d' % obj.id
+        assert location == 'http://example.com/test/%d/edit' % obj.id
 
     def test_edit_save_new(self, edit_run_factory):
         location, _ = edit_run_factory('save_new')
@@ -466,17 +614,15 @@ class TestCrudCreator(object):
             'list': 'tests.test_views.MyView.list',
             'new': 'tests.test_views.MyView.new',
             'edit': 'tests.test_views.MyView.edit',
-            'delete': 'tests.test_views.MyView.delete',
         }
         routes = [(route_names["list"], '/test'),
                   (route_names["new"], '/test/new'),
-                  (route_names["edit"], '/test/{id}'),
-                  (route_names["delete"], '/test/{id}/delete')]
+                  (route_names["edit"], '/test/{id}/edit'),
+                  ]
         views = [((View,),
                   {'attr': 'list',
                    'route_name': route_names["list"],
-                   'renderer': 'default/list.mako',
-                   'request_method': 'GET'}),
+                   'renderer': 'default/list.mako'}),
                  ((View,),
                   {'attr': 'edit',
                    'route_name': route_names["edit"],
@@ -485,13 +631,9 @@ class TestCrudCreator(object):
                   {'attr': 'edit',
                    'route_name': route_names["new"],
                    'renderer': 'default/edit.mako'}),
-                 ((View,),
-                  {'attr': 'delete',
-                   'route_name': route_names["delete"],
-                   'request_method': 'POST'}),
                  ]
-        assert config.add_route.call_count == 4
-        assert config.add_view.call_count == 4
+        assert config.add_route.call_count == 3
+        assert config.add_view.call_count == 3
         for route, view in zip(routes, views):
             assert (route, {}) in config.add_route.call_args_list
             assert view in config.add_view.call_args_list
@@ -528,7 +670,7 @@ class TestViewConfiguratorImplementations(object):
         assert self.conf.config is self.config
         assert self.conf.view_class is self.view
 
-    @pytest.mark.parametrize("action", ["list", "new", "delete", "edit"])
+    @pytest.mark.parametrize("action", ["list", "new", "edit"])
     def test_configure_view_methods(self, action):
         meth = getattr(self.conf, 'configure_%s_view' % action)
         assert meth()
@@ -548,14 +690,14 @@ class TestViewConfiguratorDefault(object):
         self.view = MyView
         self.conf = ViewConfigurator(self.config, self.view)
 
-    @pytest.mark.parametrize("action", ["list", "new", "delete", "edit"])
+    @pytest.mark.parametrize("action", ["list", "new", "edit"])
     def test_get_route_name(self, action):
         expected_name = 'tests.test_views.MyView.%s' % action
         assert self.conf._get_route_name(action) == expected_name
 
     def test_get_route_name_unique(self):
         names = set()
-        for action in ["list", "new", "delete", "edit", "foo", "lol"]:
+        for action in ["list", "new", "edit", "foo", "lol"]:
             name = self.conf._get_route_name(action)
             assert name not in names
             names.add(name)

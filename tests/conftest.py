@@ -5,6 +5,7 @@ from sqlalchemy import (Column, Integer, Table, MetaData, ForeignKey,
 from sqlalchemy.orm import mapper, relationship, Session
 import pytest
 import inspect
+import logging
 from pyramid import testing
 from pyramid.asset import abspath_from_asset_spec
 from mako.lookup import TemplateLookup
@@ -18,6 +19,19 @@ try:
     from unittest.mock import MagicMock
 except ImportError:
     from mock import MagicMock
+
+
+@pytest.fixture(autouse=True)
+def logger():
+    logging.basicConfig()
+
+
+@pytest.fixture
+def csrf_token(session, pyramid_request):
+    session.get_csrf_token.return_value = 'ABCD'
+    token = pyramid_request.session.get_csrf_token()
+    pyramid_request.POST['csrf_token'] = token
+    return 'ABCD'
 
 
 @pytest.fixture

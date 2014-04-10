@@ -54,8 +54,12 @@ against CSRF attacks while still maintaining the complete functionality of the
 .. autoclass:: CSRFModelForm
     :members:
 
-Button
-~~~~~~
 
-.. autoclass:: ButtonForm
-    :members:
+API
+---
+
+.. autoclass:: MultiCheckboxField
+.. autoclass:: MultiHiddenField
+.. autoclass:: SelectField
+
+.. _Unique Validator: https://wtforms-alchemy.readthedocs.org/en/latest/validators.html#unique-validator

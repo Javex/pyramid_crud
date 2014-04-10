@@ -1,7 +1,7 @@
 import wtforms_alchemy
 import six
 from wtforms.ext.csrf.form import SecureForm
-from wtforms.fields import SubmitField
+import wtforms
 from .util import get_pks, meta_property
 from sqlalchemy.orm.session import object_session
 from sqlalchemy.inspection import inspect
@@ -125,7 +125,7 @@ class CSRFForm(SecureForm):
         Validate the form and with it the CSRF token. Logs a warning with the
         error message and the remote IP address in case of an invalid token.
         """
-        result = SecureForm.validate(self)
+        result = super(CSRFForm, self).validate()
         if not result and self.csrf_token.errors:
             log.warn("Invalid CSRF token with error(s) '%s' from IP address "
                      "'%s'."
@@ -197,6 +197,11 @@ class ModelForm(_CoreModelForm):
         The name of this form. By default it uses the lowercase model class
         name. This is used internally und you normally do not need to change
         it.
+
+    get_dbsession:
+        Unfortunately, you have to define this ``classmethod`` on the form to
+        get support for the unique validator. It is documented in
+        `Unique Validator`_. This is a limitation we soon hope to overcome.
     """
     @classmethod
     def _relationship_key(self, other_form):
@@ -276,6 +281,7 @@ class ModelForm(_CoreModelForm):
             # Delete items where requested
             to_delete = set()  # Which items should be deleted?
             if formdata and count is not None:
+                count = int(count)
                 for index in range(count):
                     delete_key = 'delete_%s_%d' % (inline.name, index)
                     if delete_key in formdata:
@@ -318,7 +324,7 @@ class ModelForm(_CoreModelForm):
             if count is None:
                 extra = inline.extra
             else:
-                extra = int(count) - max_index
+                extra = count - max_index
             if formdata and 'add_%s' % inline.name in formdata:
                 extra += 1
 
@@ -490,31 +496,84 @@ class CSRFModelForm(ModelForm, CSRFForm):
     # forms.
 
 
-class ButtonForm(CSRFForm):
+class MultiCheckboxField(wtforms.fields.SelectMultipleField):
     """
-    A simple form that only includes a ``button`` and a ``csrf_token`` field.
-    This can be used for operations on a form that should be single-click (like
-    deletion or toggling a boolean value). Note that the reason for not using
-    a URL for this is CSRF protection for these operations.
+    A multiple-select, except displays a list of checkboxes.
 
-    The form is created in the usual way but accepts a single new argument
-    ``title`` which is stored as the label's text on the form. Thus, you can
-    instantiate this form many times with different titles.
+    Iterating the field will produce subfields, allowing custom rendering of
+    the enclosed checkbox fields.
 
-    .. note::
-        This form alone does not identify an item, you have to do that with the
-        POST url you send the form to. If you were to include a button multiple
-        rows in a single form, you would not be able to identify the correct
-        object on the server side.
+    Example for displaying this field:
 
-    An example of its usage can be found in the ``delete_form`` of the default
-    :class:`.views.CRUDView` and the corresponding templates (e.g.
-    ``default/list.mako``).
+    .. code-block:: python
+
+        class MyForm(Form):
+            items = MultiCheckboxField(choices=[('1', 'Label')]
+        form = MyForm()
+        for item in form.items:
+            str(item)  # the actual field to be displayed, likely in template
+
+    If you don't iterate, it produces an unordered list be default (if ``str``
+    is called on ``form.items``, not each item individually).
+
+    And with formdata it might look like this:
+
+    .. code-block:: python
+
+        # Definition same as above
+        formdata = MultiDict()
+        formdata.add('items', '1')
+        form = MyForm(formdata)
+        assert form.items.data == ['1']
+
+    As you can see, a list is produces instead of a scalar value which allows
+    multiple fields with the same name.
+    """
+    widget = wtforms.widgets.ListWidget(prefix_label=False)
+    option_widget = wtforms.widgets.CheckboxInput()
+
+    def pre_validate(self, form):
+        if not self.data:
+            return
+        values = list(c[0] for c in self.choices)
+        msg = ('One of the selected items does not exist anymore. It has '
+               'probably been deleted.')
+        for d in self.data:
+            if d not in values:
+                raise ValueError(self.gettext(msg))
+
+
+class MultiHiddenField(wtforms.fields.SelectMultipleField):
+    """
+    A field that represents a list of hidden input fields the same way as
+    :class:`.MultiCheckboxField` and
+    :class:`wtforms.fields.SelectMultipleField`.
+    """
+    widget = wtforms.widgets.HiddenInput()
+    option_widget = wtforms.widgets.HiddenInput()
+
+    def pre_validate(self, form):
+        if not self.data:
+            return
+        values = list(c[0] for c in self.choices)
+        msg = ('One of the selected items does not exist anymore. It has '
+               'probably been deleted.')
+        for d in self.data:
+            if d not in values:
+                raise ValueError(self.gettext(msg))
+
+
+class SelectField(wtforms.fields.SelectField):
+    """
+    Same as :class:`wtforms.fields.SelectField` with a custom validation
+    message and the requirement that ``data`` evaluates to ``True`` (for the
+    purpose of having an empty field that is not allowed).
     """
 
-    button = SubmitField()
-
-    def __init__(self, formdata=None, obj=None, prefix='',
-                 csrf_context=None, title=None, **kwargs):
-        CSRFForm.__init__(self, formdata, obj, prefix, csrf_context, **kwargs)
-        self.button.label.text = title
+    def pre_validate(self, form):
+        for v, _ in self.choices:
+            if self.data == v and self.data:
+                break
+        else:
+            raise ValueError(self.gettext('Please select an action to be '
+                                          'executed.'))
