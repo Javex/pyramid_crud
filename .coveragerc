@@ -5,3 +5,7 @@ source = pyramid_crud
 exclude_lines =
     pragma: no cover
     def _mako_get_namespace
+    def head
+    def heading
+    .*hasattr\(context\._data\['parent'\].*
+    .*__M_loop\._exit.*

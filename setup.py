@@ -49,7 +49,8 @@ class PyTest(Command):
 
     def run(self):
         import subprocess
-        errno = subprocess.call(['coverage', 'run', '-m', 'py.test', 'tests'])
+        errno = subprocess.call(['coverage', 'run', '--branch', '-m',
+                                 'py.test', 'tests'])
         errno2 = subprocess.call(['make', '-C', 'docs/', 'doctest'])
         if errno:
             raise SystemExit(errno)
