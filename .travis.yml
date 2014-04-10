@@ -5,7 +5,7 @@ python:
     - "3.3"
 install:
     - python setup.py install
-    - pip install coveralls sphinx sphinx_rtd_theme webtest
+    - pip install coveralls sphinx sphinx_rtd_theme webtest transaction
 script:
     - python setup.py test
 after_success:

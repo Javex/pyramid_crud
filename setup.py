@@ -25,7 +25,7 @@ requires = [
 ]
 
 extras_require = {
-    'test': ['pytest', 'sphinx', 'sphinx_rtd_theme'],
+    'test': ['pytest', 'sphinx', 'sphinx_rtd_theme', 'transaction', 'webtest'],
 }
 
 # Below Python 2.7
