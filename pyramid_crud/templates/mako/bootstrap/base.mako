@@ -9,7 +9,7 @@
         <%block name="head" />
         <title>${view.Form.title_plural} | CRUD</title>
     </head>
-    <body style="margin:0 20px">
+    <body class="container">
         <%block name="heading" />
     % for msg in request.session.pop_flash('error'):
         <div class="alert alert-danger">${msg}</div>

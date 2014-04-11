@@ -687,35 +687,54 @@ class TestAnyModelForm(object):
         field_names = ['val']
         assert Form.field_names == field_names
 
-    def test_fieldsets(self, model_factory, form_factory, any_form):
+    def test_get_fieldsets(self, model_factory, form_factory, any_form):
         Model = model_factory([Column('val', Integer)])
         Form = form_factory(base=any_form, model=Model)
         form = Form()
-        fieldsets = [{'title': '', 'fields': ['val']}]
-        assert form.fieldsets == fieldsets
+        fieldsets = [{'title': '', 'fields': [form.val],
+                      'template': 'horizontal'}]
+        assert form.get_fieldsets() == fieldsets
 
-    def test_fieldsets_empty(self, model_factory, form_factory, any_form):
+    def test_get_fieldsets_empty(self, model_factory, form_factory, any_form):
         Model = model_factory()
         Form = form_factory(base=any_form, model=Model)
         form = Form()
-        fieldsets = [{'title': '', 'fields': []}]
-        assert form.fieldsets == fieldsets
+        fieldsets = [{'title': '', 'fields': [], 'template': 'horizontal'}]
+        assert form.get_fieldsets() == fieldsets
 
-    def test_fieldsets_override(self, model_factory, form_factory, any_form):
-        fieldsets = [{'title': 'Test', 'fields': ['test', 'foo']}]
-        Model = model_factory()
-        Form = form_factory(base=any_form, model=Model,
-                            fields={'fieldsets': fieldsets})
-        form = Form()
-        assert form.fieldsets == fieldsets
+    def test_get_fieldsets_override(self, model_factory, form_factory,
+                                    any_form):
+        fieldsets = [{'title': 'Test', 'fields': ['test_text'],
+                      'template': 'horizontal'}]
+        self.form.fieldsets = fieldsets
+        form = self.form()
+        expected = []
+        for fieldset in fieldsets:
+            copy = dict(fieldset)
+            expected.append(copy)
+        expected[0]['fields'] = [form.test_text]
+        assert form.get_fieldsets() == expected
 
-    def test_fieldsets_no_csrf_token(self, model_factory, form_factory,
-                                     any_form):
+    def test_get_fieldsets_override_default_template(
+            self, model_factory, form_factory, any_form):
+        fieldsets = [{'title': 'Test', 'fields': ['test_text']}]
+        self.form.fieldsets = fieldsets
+        form = self.form()
+        expected = []
+        for fieldset in fieldsets:
+            copy = dict(fieldset)
+            expected.append(copy)
+        expected[0]['template'] = 'horizontal'
+        expected[0]['fields'] = [form.test_text]
+        assert form.get_fieldsets() == expected
+
+    def test_get_fieldsets_no_csrf_token(self, model_factory, form_factory,
+                                         any_form):
         Model = model_factory([Column('csrf_token', Integer)])
         Form = form_factory(base=any_form, model=Model)
         form = Form()
-        fieldsets = [{'title': '', 'fields': []}]
-        assert form.fieldsets == fieldsets
+        fieldsets = [{'title': '', 'fields': [], 'template': 'horizontal'}]
+        assert form.get_fieldsets() == fieldsets
 
     def test_primary_keys(self, model_factory, form_factory, any_form,
                           DBSession):

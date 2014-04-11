@@ -100,6 +100,21 @@ class _CoreModelForm(wtforms_alchemy.ModelForm):
                           if field.name != 'csrf_token']
         return [{'title': '', 'fields': default_fields}]
 
+    def get_fieldsets(self):
+        """
+        Get a list of all configured fieldsets, setting defaults where they are
+        missing.
+        """
+        result = []
+        for original in self.fieldsets:
+            fieldset = {
+                'title': original.get('title', ''),
+                'template': original.get('template', 'horizontal'),
+                'fields': [getattr(self, f) for f in original['fields']],
+            }
+            result.append(fieldset)
+        return result
+
 
 class CSRFForm(SecureForm):
     """
@@ -136,8 +151,7 @@ class CSRFForm(SecureForm):
 
 class ModelMeta(_CoreModelMeta):
     def __new__(meta, name, bases, attrs):
-        if "inlines" not in attrs:
-            attrs["inlines"] = []
+        attrs.setdefault("inlines", [])
         return super(ModelMeta, meta).__new__(meta, name, bases, attrs)
 
 
@@ -182,6 +196,12 @@ class ModelForm(_CoreModelForm):
 
         * ``fields``: A list of field names that should be displayed together
           in a fieldset. This is required.
+
+        * ``template``: The name of the fieldset template to load. This must be
+          the name of a file in the ``fieldsets`` directory of the current
+          theme **without** a file extension. It defaults to ``horizontal``
+          which uses bootstraps horizontal forms for each fieldset. See
+          :ref:`fieldset_templates` for details on available templates.
 
     title
         Set the title of your form. By default this returns the class name of

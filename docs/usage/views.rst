@@ -71,6 +71,11 @@ label
     While you should normally set it, not setting it will invent some hopefully
     nice-looking strings for the default usage (basically list and edit views).
 
+description
+    Used on form fields to describe a field more in-depth than a label can.
+    This text may be arbitrarily long. It is not displayed on all templates
+    (see :ref:`fieldset_templates`).
+
 css_class
     A css class which should be set on this element's context. Currently this
     is only used for the list view where the ``th`` element gets this class so

@@ -5,28 +5,22 @@ from sqlalchemy import Column, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from webob.multidict import MultiDict
 from pyramid.interfaces import IRendererFactory
-from wtforms.fields import HiddenField
+from wtforms.fields import HiddenField, TextAreaField
+from bs4 import BeautifulSoup
 import re
 
 themes = ['pyramid_crud:templates/mako/bootstrap']
 
 pytestmark = pytest.mark.usefixtures("template_setup")
 
-bool_head = re.compile(r'<th class="column-test_bool">\s+Test Bool\s+</th>')
-bool_item_yes = re.compile(r'<td class="text-success text-center">\s*Yes\s*'
-                           '</td>')
-bool_item_no = re.compile(r'<td class="text-danger text-center">\s*No\s*'
-                          '</td>')
-bool_item_no_href = re.compile(
-    r'<td class="text-danger text-center">\s*<a.*\s*No\s*</a>\s*</td>')
-text_head = re.compile(r'<th class="column-test_text">\s+Test Text\s+</th>')
 err_required = re.compile(r'<ul>\s*<li>This field is required.</li>\s*</ul>')
 
 
 def render_factory(template_name, request, **additional_args):
     def render(**kw):
         additional_args.update(kw)
-        return pyramid_render(template_name, additional_args, request=request)
+        out = pyramid_render(template_name, additional_args, request=request)
+        return BeautifulSoup(out)
     return render
 
 
@@ -50,7 +44,9 @@ def view(pyramid_request, model_factory, form_factory, venusian_init, config,
     def model_str(obj):
         return obj.test_text
     Model.__str__ = model_str
-    _Form = form_factory(model=Model, base=forms.CSRFModelForm)
+    fieldsets = [{'title': 'Bar', 'fields': ['test_text', 'test_bool']}]
+    _Form = form_factory(model=Model, base=forms.CSRFModelForm,
+                         fields={'fieldsets': fieldsets})
 
     class MyView(views.CRUDView):
         Form = _Form
@@ -86,10 +82,10 @@ def render_edit(pyramid_request, theme):
 
 def test_base(render_base, view):
     out = render_base(view=view)
-    assert "<title>Models | CRUD</title>" in out
-    assert "Test Body" in out
-    assert "HeadingTest" in out
-    assert "HeadTest" in out
+    assert "<title>Models | CRUD</title>" in str(out)
+    assert "Test Body" in str(out)
+    assert "HeadingTest" in str(out)
+    assert "HeadTest" in str(out)
 
 
 @pytest.mark.parametrize("queue, class_", [('error', 'danger'),
@@ -99,8 +95,8 @@ def test_base(render_base, view):
 def test_base_flash_msg(queue, class_, render_base, session, view):
     session.pop_flash.return_value = ["Test Message"]
     out = render_base(view=view)
-    assert "alert-%s" % class_ in out
-    assert "Test Message" in out
+    assert "alert-%s" % class_ in str(out)
+    assert "Test Message" in str(out)
     assert session.pop_flash.called_once_with(queue)
 
 
@@ -108,21 +104,29 @@ def test_list(render_list, view):
     obj = view.Form.Meta.model(test_text='Testval', test_bool=True)
     view.dbsession.add(obj)
     out = render_list(view=view, **view.list())
-    assert "Testval" in out
-    assert bool_head.search(out)
-    assert text_head.search(out)
-    assert "<h1>Models</h1>" in out
-    assert "Models | CRUD" in out
-    assert bool_item_yes.search(out)
-    assert "Delete" in out
-    assert "csrf_token" in out
+    assert "Testval" in str(out)
+    heads = out.find_all("th")
+    text_head = heads[2]
+    bool_head = heads[3]
+    assert 'column-test_text' in text_head.attrs['class']
+    assert 'column-test_bool' in bool_head.attrs['class']
+    assert 'Test Text' in text_head.string.strip()
+    assert 'Test Bool' in bool_head.string.strip()
+    assert "<h1>Models</h1>" == str(out.find("h1"))
+    assert "Models | CRUD" == out.find("title").string.strip()
+    bool_item = out.find_all('td')[3]
+    assert 'text-success' in bool_item.attrs['class']
+    assert 'Yes' == bool_item.string.strip()
+    assert out.find("input", attrs={'name': 'csrf_token', 'type': 'hidden'})
 
 
 def test_list_bool_false(render_list, view):
     obj = view.Form.Meta.model(test_bool=False, test_text='Foo')
     view.dbsession.add(obj)
     out = render_list(view=view, **view.list())
-    assert bool_item_no.search(out)
+    bool_item = out.find_all('td')[3]
+    assert 'text-danger' in bool_item.attrs['class']
+    assert 'No' == bool_item.string.strip()
 
 
 def test_list_bool_false_link(render_list, view):
@@ -130,7 +134,10 @@ def test_list_bool_false_link(render_list, view):
     obj = view.Form.Meta.model(test_bool=False, test_text='Foo')
     view.dbsession.add(obj)
     out = render_list(view=view, **view.list())
-    assert bool_item_no_href.search(out)
+    bool_item = out.find_all('td')[3]
+    assert 'text-danger' in bool_item.attrs['class']
+    bool_a = bool_item.find('a')
+    assert bool_a.string.strip() == 'No'
 
 
 # TODO: Implement a test for when no items exist yet (and add that
@@ -145,56 +152,85 @@ def test_edit(render_edit, view):
     view.dbsession.flush()
     view.request.matchdict["id"] = obj.id
     out = render_edit(view=view, **view.edit())
-    assert "<h1>Edit Model</h1>" in out
+    assert "Edit Model" == out.find("h1").string.strip()
     # Fieldset not present!
-    assert "Add another" not in out
-    assert "csrf_token" in out
-    assert 'name="test_text"' in out
-    text = ('<label for="test_text">Test Text</label>: <input id="test_t'
-            'ext" name="test_text" required type="text" value="Testval">')
-    assert text in out
-    bool_ = ('<label for="test_bool">Test Bool</label>: <input checked id'
-             '="test_bool" name="test_bool" type="checkbox" value="y">')
-    assert bool_ in out
-    assert not err_required.search(out)
+    assert "Add another" not in str(out)
+    assert out.find("input", attrs={'name': 'csrf_token', 'type': 'hidden'})
+    text_field = out.find('input', attrs={'name': 'test_text'})
+    text_label = out.find('label', attrs={'for': 'test_text'})
+    assert text_field.attrs["value"] == "Testval"
+    assert "required" in text_field.attrs
+    assert text_label.string.strip() == "Test Text"
+    bool_field = out.find('input', attrs={'name': 'test_bool'})
+    bool_label = out.find('label', attrs={'for': 'test_bool'})
+    assert bool_field.attrs['value'] == "y"
+    assert bool_label.string.strip() == "Test Bool"
+    assert "This field is required." not in str(out)
 
 
 def test_edit_fieldset_title(render_edit, view):
     view.Form.fieldsets = [{'title': 'Foo', 'fields': []}]
     out = render_edit(view=view, **view.edit())
-    assert "<legend>Foo</legend>" in out
-    assert "test_text" not in out
-    assert "test_bool" not in out
+    assert out.find("legend").string.strip() == "Foo"
+    assert "test_text" not in str(out)
+    assert "test_bool" not in str(out)
 
 
 def test_edit_hidden_field(render_edit, view, form_factory):
-    Form = form_factory({'hid_field': HiddenField()}, base=forms.CSRFModelForm,
+    Form = form_factory({'hid_field': HiddenField(), 'area': TextAreaField()},
+                        base=forms.CSRFModelForm,
                         model=view.Form.Meta.model)
     view.__class__.Form = Form
     out = render_edit(view=view, **view.edit())
-    assert 'name="hid_field" type="hidden"' in out
+    assert out.find("input", attrs={'name': 'hid_field', 'type': 'hidden'})
+    assert out.find("textarea", attrs={'name': 'area'})
 
 
 def test_edit_new(render_edit, view):
     out = render_edit(view=view, **view.edit())
-    assert "<h1>New Model</h1>" in out
-    assert "Add another" not in out
-    assert "csrf_token" in out
-    assert 'name="test_text"' in out
-    empty_text = ('<label for="test_text">Test Text</label>: <input id="test_t'
-                  'ext" name="test_text" required type="text" value="">')
-    assert empty_text in out
-    empty_bool = ('<label for="test_bool">Test Bool</label>: <input id="test_b'
-                  'ool" name="test_bool" type="checkbox" value="y">')
-    assert empty_bool in out
-    assert not err_required.search(out)
+    assert out.find("h1").string.strip() == "New Model"
+    assert "Add another" not in str(out)
+    assert out.find("input", attrs={'name': 'csrf_token', 'type': 'hidden'})
+    text_field = out.find("input", attrs={'name': 'test_text'})
+    text_label = out.find("label", attrs={'for': 'test_text'})
+    assert text_label.string.strip() == "Test Text"
+    assert text_field.attrs["value"] == ""
+    assert "required" in text_field.attrs
+
+    bool_field = out.find("input", attrs={'name': 'test_bool',
+                                          'type': 'checkbox'})
+    bool_label = out.find("label", attrs={'for': 'test_bool'})
+    assert bool_label.string.strip() == "Test Bool"
+    assert bool_field.attrs["value"] == "y"
+    assert "This field is required." not in out
 
 
 def test_edit_field_errors(render_edit, view):
     view.request.method = 'POST'
     view.request.POST["save"] = "Foo"
     out = render_edit(view=view, **view.edit())
-    assert err_required.search(out)
+    err_msg = out.find("ul").find("li").string.strip()
+    assert "This field is required." == err_msg
+
+
+# TODO: These checks should do something
+def check_grid(out, view):
+    pass
+
+
+def check_horizontal(out, view):
+    pass
+
+
+@pytest.mark.parametrize("template, check_template",
+                         [('horizontal', check_horizontal),
+                          ('grid', check_grid),
+                          ])
+def test_edit_template(render_edit, view, template, check_template):
+    view.Form.fieldsets[0]['template'] = template
+    out = render_edit(view=view, **view.edit())
+    check_template(out, view)
+    assert out.find("legend").string.strip() == "Bar"
 
 
 @pytest.mark.parametrize("with_obj", [True, False])
@@ -217,16 +253,18 @@ def test_edit_inline_tabular(render_edit, view, model_factory, form_factory,
         view.dbsession.flush()
         view.request.matchdict["id"] = parent.id
     out = render_edit(view=view, **view.edit())
-    assert "Childs" in out
-    assert "<th>child_text</th>" in out
-    assert "<th>Delete?</th>" in out
-    assert 'name="child_0_child_text"' in out
-    assert 'name="delete_child_0"' in out
-    assert 'name="add_child"' in out
+    assert out.find_all("legend")[1].string.strip() == "Childs"
+    text_head, delete_head = out.find_all("th")
+    assert text_head.string.strip() == "child_text"
+    assert delete_head.string.strip() == "Delete?"
+    assert out.find("input", attrs={'name': 'child_0_child_text'})
+    assert out.find("input", attrs={'name': 'delete_child_0'})
+    assert out.find("input", attrs={'name': 'add_child'})
     if with_obj:
-        assert 'name="child_0_id" value="1"' in out
+        child_id = out.find('input', attrs={'name': 'child_0_id'})
+        assert child_id.attrs['value'] == '1'
     else:
-        assert not re.search(r'child_\d+_id', out)
+        assert not re.search(r'child_\d+_id', str(out))
 
 
 def test_list_display_links(render_list, view):
@@ -235,6 +273,6 @@ def test_list_display_links(render_list, view):
     view.request.dbsession.flush()
     view.__class__.list_display_links = ('test_text', 'test_bool')
     out = render_list(view=view, **view.list())
-    search_re = r'<a href="http://example.com/test/1/edit">\s*%s\s*</a>'
-    assert re.search(search_re % 'Testval', out)
-    assert re.search(search_re % 'Yes', out)
+    _, _, text_cell, bool_cell = out.find_all("td")
+    assert text_cell.find("a").string.strip() == "Testval"
+    assert bool_cell.find("a").string.strip() == "Yes"

@@ -21,6 +21,25 @@ Finally, you can of course always override the methods on the form.
     :members:
     :inherited-members:
 
+.. _fieldset_templates:
+
+Fieldset Templates
+~~~~~~~~~~~~~~~~~~
+
+You can configure custom fieldset templates on the :ref:`fieldsets <fieldsets>`
+configuration parameter by setting the "template" key for a fieldset. The
+following fieldsets are available:
+
+horizontal
+    A typical horizontal display that renders each form field in its own row
+    with a label before the field.
+
+grid
+    A grid display that renders the field first and then displays the label.
+    All fields are next to each other and line breaks only happen at the edge
+    of the screen. This is a good template for a fieldset that consists only of
+    checkboxes.
+
 .. _inline_forms:
 
 Inline Forms

@@ -756,7 +756,7 @@ class CRUDView(object):
                     col = getattr(self, col)
                 else:
                     raise AttributeError("No attribute of name '%s' on model "
-                                         "or view found")
+                                         "or view found", col)
             # Create a copy
             if hasattr(col, 'info'):
                 col_info = dict(col.info)
