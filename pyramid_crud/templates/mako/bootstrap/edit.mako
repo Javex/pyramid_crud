@@ -1,11 +1,11 @@
-<%inherit file="base.mako" />
+<%inherit file="${context.get('view').get_template_for('base')}" />
 <h1>${'New' if is_new else 'Edit'} ${view.Form.title}</h1>
 <form method="POST" class="crud-edit">
 	% for fieldset in form.fieldsets:
-		<%include file="fieldset.mako" args="fieldset=fieldset" />
+        <%include file="${context.get('view').get_template_for('fieldsets/horizontal')}" args="fieldset=fieldset" />
     % endfor
     % for inline, items in form.inline_fieldsets.values():
-        <%include file="edit_inline/tabular.mako" args="inline=inline, items=items" />
+        <%include file="${context.get('view').get_template_for('edit_inline/tabular')}" args="inline=inline, items=items" />
     % endfor
     ${form.csrf_token}
     <div class="pull-right">

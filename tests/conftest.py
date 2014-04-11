@@ -48,7 +48,7 @@ def venusian_init(config):
 
 
 @pytest.fixture(params=[views.ViewConfigurator])
-def view_configurator(request):
+def view_configurator_class(request):
     """Get one of all available view configurators on each invocation thus
     allowing to test multiple configurators so conform to the specification"""
     return request.param
@@ -56,8 +56,8 @@ def view_configurator(request):
 
 @pytest.fixture(scope="session")
 def compiled_templates():
-    template_dir = abspath_from_asset_spec('pyramid_crud:templates')
-    module_dir = abspath_from_asset_spec('pyramid_crud:_template_cache')
+    template_dir = abspath_from_asset_spec('pyramid_crud:templates/mako')
+    module_dir = abspath_from_asset_spec('pyramid_crud:_mako_template_cache')
     l = TemplateLookup(directories=[template_dir],
                        module_directory=module_dir)
     templates = set()
@@ -73,10 +73,8 @@ def compiled_templates():
 
 @pytest.fixture
 def template_setup(config, compiled_templates):
-    template_dir = abspath_from_asset_spec('pyramid_crud:templates')
-    module_dir = abspath_from_asset_spec('pyramid_crud:_template_cache')
-    config.add_settings({'mako.directories': template_dir,
-                         'mako.module_directory': module_dir})
+    module_dir = abspath_from_asset_spec('pyramid_crud:_mako_template_cache')
+    config.add_settings({'mako.module_directory': module_dir})
     config.include("pyramid_mako")
     config.commit()
 

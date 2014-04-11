@@ -466,8 +466,11 @@ class TabularInLine(BaseInLine):
     basically a list view of the fields only that you can edit and delete them
     and even insert new ones.
     """
-    template = 'default/edit_inline/tabular.mako'
-    """The default template for tabular display"""
+
+    #: The default template for a tabular display. It gets resolved by
+    #: :meth:`CRUDView.get_template <pyramid_crud.views.CRUDView.get_template>`
+    #: and should usually not need changing here.
+    template = 'edit_inline/tabular'
 
 
 class CSRFModelForm(ModelForm, CSRFForm):

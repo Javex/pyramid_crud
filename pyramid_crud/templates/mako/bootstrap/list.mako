@@ -1,4 +1,4 @@
-<%inherit file="base.mako" />
+<%inherit file="${context.get('view').get_template_for('base')}" />
 <%block name="head">
     <script src="${request.static_url('pyramid_crud:static/list.js')}"></script>
 </%block>

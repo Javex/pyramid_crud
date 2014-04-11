@@ -71,22 +71,6 @@ class ViewConfigurator(object):
                   'action': action}
         return "%(module)s.%(class)s.%(action)s" % params
 
-    def _template_for(self, action):
-        """
-        Return the name of the template to be used. By default this uses the
-        template in the folder ``template_dir`` with the name
-        ``action + template_ext``, so for example in the default case for a
-        list view: "default/list.mako". The parameters ``template_dir`` and
-        ``template_ext`` are based on the parameters in :class:`.CRUDView`.
-        """
-        params = {
-            'template_dir': self.view_class.template_dir,
-            'action': action,
-            'template_ext': self.view_class.template_ext,
-        }
-        default_name = '%(template_dir)s/%(action)s%(template_ext)s' % params
-        return getattr(self.view_class, '%s_template' % action, default_name)
-
     def _configure_view(self, action, route_action=None, *args, **kw):
         """
         Configure a view via :meth:`pyramid.config.Configurator.add_view` while
@@ -201,14 +185,16 @@ class ViewConfigurator(object):
 
             def configure_list_view(self):
                 self.config.add_view('myview-list',
-                                     renderer='default/list.mako',)
+                                     renderer='list.mako',)
                 self.config.add_route('myview-list', self.view_class.url_path)
                 return 'myview-list'
 
         This does a few things:
 
         * It sets up the view under the alias ``myview-list`` with the template
-          ``default/list.mako`` (the standard list template).
+          ``list.mako``. Note that the default configuration uses a theme and
+          absolute paths while this configures a template that needs to be
+          in ``mako.directories``.
 
         * It connects the alias to the configured route via the
           :ref:`url_path <url_path>` configuration parameter (the list view is
@@ -217,7 +203,8 @@ class ViewConfigurator(object):
         * It returns this alias from the function so that it can be stored in
           the ``routes`` dictionary on the view.
         """
-        self._configure_view('list', renderer=self._template_for('list'))
+        self._configure_view('list',
+                             renderer=self.view_class.get_template_for('list'))
         return self._configure_route('list', '')
 
     def configure_edit_view(self):
@@ -228,7 +215,8 @@ class ViewConfigurator(object):
         return the name of the route as well that will then be stored under the
         "edit" key.
         """
-        self._configure_view('edit', renderer=self._template_for('edit'))
+        self._configure_view('edit',
+                             renderer=self.view_class.get_template_for('edit'))
         return self._configure_route('edit',
                                      '/%s/edit' % self._get_route_pks())
 
@@ -241,7 +229,7 @@ class ViewConfigurator(object):
         "new" key.
         """
         self._configure_view('edit', 'new',
-                             renderer=self._template_for('edit'))
+                             renderer=self.view_class.get_template_for('edit'))
         return self._configure_route('new', '/new')
 
 
@@ -254,7 +242,7 @@ class CRUDCreator(type):
     def __init__(cls, name, bases, attrs):
         def cb(context, name, ob):
             config = context.config.with_package(info.module)
-            configurator = cls.view_configurator(config, cls)
+            configurator = cls.view_configurator_class(config, cls)
             list_route = configurator.configure_list_view()
             edit_route = configurator.configure_edit_view()
             new_route = configurator.configure_new_view()
@@ -273,7 +261,7 @@ class CRUDCreator(type):
                     "Invalid configuration. The following attributes are "
                     "missing and need to be defined for a complete "
                     "configuration : %s" % ", ".join(missing))
-            if cls.view_configurator is not None:
+            if cls.view_configurator_class is not None:
                 info = venusian.attach(cls, cb)
 
             # Initialize mutable defaults
@@ -294,7 +282,8 @@ class CRUDView(object):
         :meth:`pyramid.config.Configurator.scan` in a way similar to what
         the :class:`pyramid.view.view_config` decorator does. If you want to
         completely disable this behavior, set
-        :ref:`view_configurator <view_configurator_cfg>` to ``None``. Then no
+        :ref:`view_configurator_class <view_configurator_class_cfg>` to
+        ``None``. Then no
         route configuration will be done and you have to set up views and
         routes yourself. This is an advanced technique not recommended for
         beginners.
@@ -312,7 +301,8 @@ class CRUDView(object):
 
     url_path
         Mandatory arguments if the default
-        :ref:`view_configurator <view_configurator_cfg>` is used. It determines
+        :ref:`view_configurator_class <view_configurator_class_cfg>` is used.
+        It determines
         the base path under which this view should be available.
 
         So for example, if this is ``/myitems`` then the list view will be
@@ -449,32 +439,47 @@ class CRUDView(object):
         An optional list of action callables or view method names for the
         dropdown menu. See :ref:`actions` for details on how to use it.
 
-    template_dir
-        The directory where to find templates. The default
-        templates are provided in the ``default`` folder. This is used
-        by the default :ref:`view_configurator <view_configurator_cfg>` and not
-        necessarily used if you change its behavior.
+    .. _theme_cfg:
+
+    theme
+        A theme is just a collection of template files inside a directory and
+        this is the name of that directory. The recommended way is to use
+        asset specification to unambigously identify the package. By default
+        the bootstrap template is used and so this is set to
+        ``pyramid_crud:templates/mako/bootstrap``. If you want to roll your
+        own theme, you
+        can overwrite this. But if you only want to copy a single template and
+        modify it, you should check out :ref:`templates`.
+
+    .. _template_ext_cfg:
 
     template_ext
         Which file extension to use for templates. By default,
         Mako templates are used and so the extension is ``.mako`` but any
-        rendered that is recognized by pramid can be used. This is used
-        by the default :ref:`view_configurator <view_configurator_cfg>` and not
-        necessarily used if you change its behavior.
+        renderer that is recognized by pramid can be used.
 
-    template_base_name
-        The name of the base template, i.e. from which all
-        templates should inherit. Using this you can override the general style
-        of the page using a single template instead of having to copy all of
-        them and editing them one-by-one. It defaults to ``base``.
+    .. _template_override_cfg:
 
-        .. todo::
+    template_*
+        You can specify any name here, e.g. ``template_list`` and the
+        :meth:`.CRUDView.get_template_for` method will use this when calling
+        it with ``list`` as the action parameter. This is useful for
+        overwriting specific templates but keeping the default behavior for the
+        rest.
 
-            Implement / Test / Document better
+        .. note::
+            The name "ext" for an action is thus not allowed (as
+            ``template_ext`` is another configuration). Just don't define an
+            action with that name.
 
-    .. _view_configurator_cfg:
+            This way is also impossible for templates in subdirectories, for
+            example ``fieldsets/horizontal.mako`` since a slash ("/") cannot
+            be used on a path. Currently the only way is to overwrite
+            :meth:`CRUDView.get_template_for`.
 
-    view_configurator
+    .. _view_configurator_class_cfg:
+
+    view_configurator_class
         A class that configures all views and routes for this view class. The
         default implementation is :class:`ViewConfigurator` which covers
         basic route & view configuration. However, if you need more advanced
@@ -498,7 +503,7 @@ class CRUDView(object):
         This will return a URL to the list view.
 
         The routes dictionary is populated by the
-        :ref:`view_configurator <view_configurator_cfg>`.
+        :ref:`view_configurator_class <view_configurator_class_cfg>`.
 
         This can be accessed at the class and instance level.
 
@@ -506,10 +511,10 @@ class CRUDView(object):
         The current request, an instance of :class:`pyramid.request.Request`.
     """
     __abstract__ = True
-    template_dir = 'default'
+    theme = 'pyramid_crud:templates/mako/bootstrap'
     template_ext = '.mako'
     template_base_name = 'base'
-    view_configurator = ViewConfigurator
+    view_configurator_class = ViewConfigurator
 
     def __init__(self, request):
         self.request = request
@@ -603,8 +608,9 @@ class CRUDView(object):
                 return True, None
             else:
                 data = {'items': items, 'view': self, 'form': form}
-                response = render_to_response('default/delete_confirm.mako',
-                                              data, request=self.request)
+                template = self.get_template_for('delete_confirm')
+                response = render_to_response(template, data,
+                                              request=self.request)
                 return True, response
         except Exception:
             log.warning("Deletion of items failed:\n%s" % format_exc())
@@ -698,6 +704,41 @@ class CRUDView(object):
 
     # Template helper functions
 
+    @classmethod
+    def get_template_for(cls, action):
+        """
+        Return the name of the template to be used. By default this uses the
+        template in the folder ``theme`` with the name
+        ``action + template_ext``, so for example in the default case for a
+        list view: "pyramid_crud:templates/mako/bootstrap/list.mako".
+
+        This method basically just appends the given action to a base path
+        and appends the file extension. As such, it is perfectly fine, to
+        define relative paths here:
+
+        .. code-block:: python
+
+            view.get_template_for('fieldsets/horizontal')
+
+        You can also change single templates by statically defining
+        ``action_template`` on the view class where ``action`` is replaced
+        by a specific action, e.g. ``list``. So say, for example, you want to
+        only change the default list template and keep the others. In that
+        case, you would specify
+        ``list_template = "templates/my_crud_list.mako"`` and the list template
+        would be loaded from there (while still loading all other templates
+        from their default location).
+
+        :param action: The action, e.g. ``list`` or ``edit``.
+        """
+        params = {
+            'theme': cls.theme,
+            'action': action,
+            'template_ext': cls.template_ext,
+        }
+        default_name = '%(theme)s/%(action)s%(template_ext)s' % params
+        return getattr(cls, '%s_template' % action, default_name)
+
     def iter_head_cols(self):
         """
         Get an iterable of column headings based on the configuration in
@@ -766,8 +807,7 @@ class CRUDView(object):
     def list(self):
         """
         List all items for a Model. This is the default view that can be
-        overridden by subclasses to change its behavior. The attached default
-        template is named "default/list.mako".
+        overridden by subclasses to change its behavior.
 
         :return: A dict with a single key ``items`` that is a query which when
             iterating over yields all items to be listed.
@@ -810,7 +850,7 @@ class CRUDView(object):
     def edit(self):
         """
         The default view for editing an item. It loads the configured form and
-        model. The default template is "default/edit.mako". In edit mode (i.e.
+        model. In edit mode (i.e.
         with an already existing object) it requires
         a matchdict mapping primary key names to their values. This has to be
         ensured during route configuring by setting the correct pattern. The

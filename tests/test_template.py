@@ -8,8 +8,10 @@ from pyramid.interfaces import IRendererFactory
 from wtforms.fields import HiddenField
 import re
 
+themes = ['pyramid_crud:templates/mako/bootstrap']
 
 pytestmark = pytest.mark.usefixtures("template_setup")
+
 bool_head = re.compile(r'<th class="column-test_bool">\s+Test Bool\s+</th>')
 bool_item_yes = re.compile(r'<td class="text-success text-center">\s*Yes\s*'
                            '</td>')
@@ -21,10 +23,16 @@ text_head = re.compile(r'<th class="column-test_text">\s+Test Text\s+</th>')
 err_required = re.compile(r'<ul>\s*<li>This field is required.</li>\s*</ul>')
 
 
-def render_factory(template_name, request):
+def render_factory(template_name, request, **additional_args):
     def render(**kw):
-        return pyramid_render(template_name, kw, request=request)
+        additional_args.update(kw)
+        return pyramid_render(template_name, additional_args, request=request)
     return render
+
+
+@pytest.fixture(params=themes)
+def theme(request):
+    return request.param
 
 
 @pytest.fixture
@@ -48,32 +56,32 @@ def view(pyramid_request, model_factory, form_factory, venusian_init, config,
         Form = _Form
         url_path = '/test'
         list_display = ('id', 'test_text', 'test_bool')
+    venusian_init(MyView)
     view = MyView(pyramid_request)
-    venusian_init(view)
     config.commit()
     return view
 
 
 @pytest.fixture
-def render_base(pyramid_request, config):
+def render_base(pyramid_request, config, theme):
     # For base we need an inheriting template to avoid recursion
-    tmpl = """<%inherit file="default/base.mako"/>
+    tmpl = """<%inherit file="${context.get('theme')}/base.mako"/>
     <%block name="head">HeadTest</%block>
     <%block name="heading">HeadingTest</%block>
     Test Body"""
     renderer = config.registry.queryUtility(IRendererFactory, '.mako')
     renderer.lookup.put_string('test.mako', tmpl)
-    return render_factory("test.mako", pyramid_request)
+    return render_factory("test.mako", pyramid_request, theme=theme)
 
 
 @pytest.fixture
-def render_list(pyramid_request):
-    return render_factory("default/list.mako", pyramid_request)
+def render_list(pyramid_request, theme):
+    return render_factory("%s/list.mako" % theme, pyramid_request)
 
 
 @pytest.fixture
-def render_edit(pyramid_request):
-    return render_factory("default/edit.mako", pyramid_request)
+def render_edit(pyramid_request, theme):
+    return render_factory("%s/edit.mako" % theme, pyramid_request)
 
 
 def test_base(render_base, view):

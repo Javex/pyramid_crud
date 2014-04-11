@@ -253,8 +253,8 @@ class TestCRUDView(object):
         cols = list(self.view.iter_list_cols(obj))
         assert cols == [('upper', self.View.upper)]
 
-    def test_template_dir(self):
-        assert self.view.template_dir == 'default'
+    def test_default_theme(self):
+        assert isinstance(self.view.theme, str)
 
     def test_template_ext(self):
         assert self.view.template_ext == '.mako'
@@ -569,6 +569,19 @@ class TestCRUDView(object):
         assert len(form.errors) == 0
         assert self.request.session.flash.call_count == 0
 
+    def test_get_template_for(self):
+        self.View.foo_template = "sometemplate.mako"
+        assert self.View.get_template_for("foo") == "sometemplate.mako"
+
+    def test_get_template_for_default(self):
+        tmpl_path = "templates/mako/bootstrap/foo.mako"
+        assert self.View.get_template_for("foo").endswith(tmpl_path)
+
+    def test_get_template_for_params(self):
+        self.View.theme = 'somedir'
+        self.View.template_ext = '.txt'
+        assert self.View.get_template_for("foo") == "somedir/foo.txt"
+
 
 class TestCrudCreator(object):
 
@@ -619,18 +632,19 @@ class TestCrudCreator(object):
                   (route_names["new"], '/test/new'),
                   (route_names["edit"], '/test/{id}/edit'),
                   ]
+        tmpl_base = 'pyramid_crud:templates/mako/bootstrap'
         views = [((View,),
                   {'attr': 'list',
                    'route_name': route_names["list"],
-                   'renderer': 'default/list.mako'}),
+                   'renderer': '%s/list.mako' % tmpl_base}),
                  ((View,),
                   {'attr': 'edit',
                    'route_name': route_names["edit"],
-                   'renderer': 'default/edit.mako'}),
+                   'renderer': '%s/edit.mako' % tmpl_base}),
                  ((View,),
                   {'attr': 'edit',
                    'route_name': route_names["new"],
-                   'renderer': 'default/edit.mako'}),
+                   'renderer': '%s/edit.mako' % tmpl_base}),
                  ]
         assert config.add_route.call_count == 3
         assert config.add_view.call_count == 3
@@ -641,23 +655,23 @@ class TestCrudCreator(object):
 
     def test_disabled_configuration(self):
         view = self.make_view(url_path='/test', Form=self.Form,
-                              view_configurator=None)
+                              view_configurator_class=None)
         assert not hasattr(view, '__venusian_callbacks__')
 
     def test_disabled_configuration_still_checks(self):
         with pytest.raises(AttributeError):
-            self.make_view(url_path='/test', view_configurator=None)
+            self.make_view(url_path='/test', view_configurator_class=None)
         with pytest.raises(AttributeError):
-            self.make_view(Form=self.Form, view_configurator=None)
+            self.make_view(Form=self.Form, view_configurator_class=None)
         with pytest.raises(AttributeError):
-            self.make_view(view_configurator=None)
+            self.make_view(view_configurator_class=None)
 
 
 class TestViewConfiguratorImplementations(object):
 
     @pytest.fixture(autouse=True)
-    def _prepare(self, view_configurator):
-        self.conf_class = view_configurator
+    def _prepare(self, view_configurator_class):
+        self.conf_class = view_configurator_class
         self.config = MagicMock()
 
         class MyView(CRUDView):
@@ -701,15 +715,3 @@ class TestViewConfiguratorDefault(object):
             name = self.conf._get_route_name(action)
             assert name not in names
             names.add(name)
-
-    def test__template_for(self):
-        self.view.foo_template = "sometemplate.mako"
-        assert self.conf._template_for("foo") == "sometemplate.mako"
-
-    def test__template_for_default(self):
-        assert self.conf._template_for("foo") == "default/foo.mako"
-
-    def test__template_for_params(self):
-        self.view.template_dir = 'somedir'
-        self.view.template_ext = '.txt'
-        assert self.conf._template_for("foo") == "somedir/foo.txt"

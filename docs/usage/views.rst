@@ -106,6 +106,7 @@ Addtionally, the following helper methods are used internally during several
 sections of the library:
 
 .. automethod:: CRUDView.redirect
+.. automethod:: CRUDView.get_template_for
 .. automethod:: CRUDView._get_request_pks
 .. automethod:: CRUDView._get_route_pks
 .. automethod:: CRUDView._edit_route
@@ -127,7 +128,6 @@ the default implementations above.
 .. automethod:: ViewConfigurator._configure_view
 .. automethod:: ViewConfigurator._configure_route
 .. automethod:: ViewConfigurator._get_route_name
-.. automethod:: ViewConfigurator._template_for
 .. automethod:: ViewConfigurator._get_route_pks
 
 

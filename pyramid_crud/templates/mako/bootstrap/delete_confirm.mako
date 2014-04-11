@@ -1,4 +1,4 @@
-<%inherit file="base.mako" />
+<%inherit file="${context.get('view').get_template_for('base')}" />
 <%block name="heading">
     <h1>Delete ${view.Form.title_plural}</h1>
 </%block>
