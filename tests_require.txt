@@ -1,0 +1,8 @@
+Sphinx
+docutils
+sphinx_rtd_theme
+pytest
+transaction
+webtest
+beautifulsoup4
+mock

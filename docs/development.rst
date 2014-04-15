@@ -26,11 +26,11 @@ of the requirements to create docs (for doctests) and pytest:
 
 .. code-block:: text
 
-    pip install -r docs_require.txt
-    pip install pytest mock webtest transaction
+    pip install -r tests_require.txt
 
 .. note::
-    Note mock is an unnecessary requirement for users of python 3.3 and above.
+    ``mock`` is an unnecessary requirement for users of python 3.3 and above,
+    but it is included in the above file unconditionally.
 
 Now you can run your tests with:
 

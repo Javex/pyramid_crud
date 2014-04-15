@@ -24,18 +24,9 @@ requires = [
     'six',
 ]
 
-extras_require = {
-    'test': ['pytest', 'sphinx', 'sphinx_rtd_theme', 'transaction', 'webtest'],
-}
-
 # Below Python 2.7
 if sys.version_info[0] == 2 and sys.version_info[1] < 7:
     requires += ['ordereddict>=1.1']
-
-
-if (sys.version_info[0] == 2 or
-        sys.version_info[0] == 3 and sys.version_info[1] < 3):
-    extras_require['test'] += 'mock'
 
 
 class PyTest(Command):
@@ -80,6 +71,5 @@ setup(name='pyramid_crud',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
-      extras_require=extras_require,
       cmdclass={'test': PyTest},
       )
