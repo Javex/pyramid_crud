@@ -38,7 +38,7 @@ grid
     A grid display that renders the field first and then displays the label.
     All fields are next to each other and line breaks only happen at the edge
     of the screen. This is a good template for a fieldset that consists only of
-    checkboxes.
+    checkboxes. This will not display the "description" of a field.
 
 .. _inline_forms:
 
