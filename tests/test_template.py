@@ -29,6 +29,11 @@ def theme(request):
     return request.param
 
 
+@pytest.fixture(params=['horizontal', 'grid'])
+def edit_template(request):
+    return request.param
+
+
 @pytest.fixture
 def view(pyramid_request, model_factory, form_factory, venusian_init, config,
          DBSession):
@@ -146,7 +151,8 @@ def test_list_empty():
     pass
 
 
-def test_edit(render_edit, view):
+def test_edit(render_edit, view, edit_template):
+    view.Form.fieldsets[0]["template"] = edit_template
     obj = view.Form.Meta.model(test_text='Testval', test_bool=True)
     view.dbsession.add(obj)
     view.dbsession.flush()
@@ -168,8 +174,9 @@ def test_edit(render_edit, view):
     assert "This field is required." not in str(out)
 
 
-def test_edit_fieldset_title(render_edit, view):
-    view.Form.fieldsets = [{'title': 'Foo', 'fields': []}]
+def test_edit_fieldset_title(render_edit, view, edit_template):
+    view.Form.fieldsets = [{'title': 'Foo', 'fields': [],
+                            'template': edit_template}]
     out = render_edit(view=view, **view.edit())
     assert out.find("legend").string.strip() == "Foo"
     assert "test_text" not in str(out)
@@ -186,7 +193,8 @@ def test_edit_hidden_field(render_edit, view, form_factory):
     assert out.find("textarea", attrs={'name': 'area'})
 
 
-def test_edit_new(render_edit, view):
+def test_edit_new(render_edit, view, edit_template):
+    view.Form.fieldsets[0]["template"] = edit_template
     out = render_edit(view=view, **view.edit())
     assert out.find("h1").string.strip() == "New Model"
     assert "Add another" not in str(out)
@@ -205,12 +213,13 @@ def test_edit_new(render_edit, view):
     assert "This field is required." not in out
 
 
-def test_edit_field_errors(render_edit, view):
+def test_edit_field_errors(render_edit, view, edit_template):
+    view.Form.fieldsets[0]["template"] = edit_template
     view.request.method = 'POST'
     view.request.POST["save"] = "Foo"
     out = render_edit(view=view, **view.edit())
-    err_msg = out.find("ul").find("li").string.strip()
-    assert "This field is required." == err_msg
+    err_msg = str(out.find("div", class_='alert-danger'))
+    assert "This field is required." in err_msg
 
 
 # TODO: These checks should do something
@@ -235,7 +244,8 @@ def test_edit_template(render_edit, view, template, check_template):
 
 @pytest.mark.parametrize("with_obj", [True, False])
 def test_edit_inline_tabular(render_edit, view, model_factory, form_factory,
-                             with_obj):
+                             with_obj, edit_template):
+    view.Form.fieldsets[0]["template"] = edit_template
     cols = [Column('parent_id', ForeignKey('model.id')),
             Column('child_text', String)]
     rels = {'parent': relationship(view.Form.Meta.model, backref="children")}
@@ -267,7 +277,8 @@ def test_edit_inline_tabular(render_edit, view, model_factory, form_factory,
         assert not re.search(r'child_\d+_id', str(out))
 
 
-def test_list_display_links(render_list, view):
+def test_list_display_links(render_list, view, edit_template):
+    view.Form.fieldsets[0]["template"] = edit_template
     obj = view.Form.Meta.model(test_text='Testval', test_bool=True)
     view.request.dbsession.add(obj)
     view.request.dbsession.flush()

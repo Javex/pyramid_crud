@@ -41,7 +41,8 @@ def venusian_init(config):
 
     def run_cbs(obj):
         for cb_list in obj.__venusian_callbacks__.values():
-            for cb, _ in cb_list:
+            for item in cb_list:
+                cb = item[0]
                 cb(context, None, None)
     run_cbs.context = context
     return run_cbs
