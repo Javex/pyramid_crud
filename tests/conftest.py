@@ -72,8 +72,8 @@ def compiled_templates():
         l.get_template(template)
 
 
-@pytest.fixture
-def template_setup(config, compiled_templates):
+@pytest.fixture(params=['bootstrap'])
+def template_setup(config, compiled_templates, request):
     module_dir = abspath_from_asset_spec('pyramid_crud:_mako_template_cache')
     config.add_settings({'mako.module_directory': module_dir})
     config.include("pyramid_mako")
