@@ -12,7 +12,7 @@ class SessionMixin(object):
 class ChoiceInline(TabularInLine):
     class Meta:
         model = Choice
-    extra = 0
+    extra = 2
 
     @classmethod
     def get_session(cls):

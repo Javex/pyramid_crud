@@ -116,18 +116,40 @@ class TestFunctional(object):
         assert len(rows) == 0
 
     def test_new_edit_delete(self):
+        # Get a list of items
         response = self.app.get('/polls')
         assert response.status_int == 200
+
+        # Fetch the form for a new item
         response = response.click(href="http://localhost/polls/new")
         assert response.status_int == 200
         assert len(response.forms) == 1
+        # Make sure the extra fields are there
+        assert 'choice_0_choice_text' in response.form.fields
+        assert 'choice_1_choice_text' in response.form.fields
+        assert 'choice_2_choice_text' not in response.form.fields
+
+        # Remove the extra fields
+        response = response.form.submit('delete_choice_0')
+        assert response.status_int == 200
+        response = response.form.submit('delete_choice_0')
+        assert response.status_int == 200
+
+        # Create an invalid form
+        response = response.form.submit('save_close')
+        assert response.status_int == 200
+        assert "This field is required" in response
+
+        # Fill out the form properly
         form = response.form
         form['question'] = "Wazzup"
         form['pub_date'] = '2014-04-09 10:48:17'
-        response = form.submit('save_close')
+        response = response.form.submit('save_close')
         assert response.status_int == 302
         response = response.follow()
         assert "Poll added!" in response
+
+        # Make sure the item was actually added
         table = response.html.find("table")
         rows = table.find("tbody").find_all("tr")
         assert len(rows) == 1
@@ -138,15 +160,69 @@ class TestFunctional(object):
         assert pub_date.string.strip() == '2014-04-09 10:48:17'
         assert published.string.strip() == 'No'
 
+        # Visit the existing item to edit it and add a choice
+        response = response.click(href=href)
+        response = response.form.submit('add_choice')
+        form = response.form
+        form['choice_0_choice_text'] = 'Choice1'
+        form['choice_0_votes'] = '5'
+        response = form.submit('save')
+        assert response.status_int == 302
+        response = response.follow()
+        assert "Poll edited!" in response
+
+        # Now delete that saved choice again and make sure it is persisted
+        form = response.form
+        assert form['choice_0_id'].value == '1'
+        assert form['choice_0_choice_text'].value == 'Choice1'
+        assert 'choice_1_id' not in form.fields
+        assert 'choice_1_choice_text' not in form.fields
+        assert 'choice_2_id' not in form.fields
+        assert 'choice_2_choice_text' not in form.fields
+        response = form.submit('delete_choice_0')
+        assert response.status_int == 200
+
+        # Make sure it is gone
+        form = response.form
+        assert 'choice_0_id' not in form.fields
+        assert 'choice_0_choice_text' not in form.fields
+        assert 'choice_1_choice_text' not in form.fields
+        response = form.submit('save_close')
+        assert response.status_int == 302
+        response = response.follow()
+        assert "Poll edited!" in response
+
+        # Create a second poll
+        response = response.click(href="http://localhost/polls/new")
+        response = response.form.submit('delete_choice_0')
+        response = response.form.submit('delete_choice_0')
+        form = response.form
+        form['question'] = "Wazzup"
+        form['pub_date'] = '2014-04-09 10:48:17'
+        response = response.form.submit('save_close')
+        response = response.follow()
+        assert "Poll added!" in response
+
+        # Delete the Poll
         form = response.form
         form['action'] = 'delete'
         form['items'] = ['1']
-
-        response = form.submit()
+        response = form.submit('submit')
         assert response.status_int == 200
-        response = response.form.submit('confirm_delete')
 
+        # Press Cancel
+        response = response.click(href="http://localhost/polls")
+        assert response.status_int == 200
+
+        # Delete (for real)
+        form = response.form
+        form['action'] = 'delete'
+        form['items'] = ['1']
+        response = form.submit('submit')
+        assert response.status_int == 200
+
+        # Confirm deletion
+        response = response.form.submit('confirm_delete')
         assert response.status_int == 302
         response = response.follow()
-        assert response.status_int == 200
         assert "1 Poll deleted!" in response
