@@ -78,9 +78,9 @@ class _CoreModelForm(wtforms_alchemy.ModelForm):
     """
 
     def __init__(self, formdata=None, obj=None, *args, **kw):
-        self.obj = obj
         self.formdata = formdata
         super(_CoreModelForm, self).__init__(formdata, obj, *args, **kw)
+        self._obj = obj
 
     @property
     def primary_keys(self):
@@ -88,9 +88,9 @@ class _CoreModelForm(wtforms_alchemy.ModelForm):
         Get a list of pairs ``name, value`` of primary key names and their
         values on the current object.
         """
-        if self.obj is None:
+        if self._obj is None:
             raise AttributeError("No object attached")
-        return [(pk, getattr(self.obj, pk, None))
+        return [(pk, getattr(self._obj, pk, None))
                 for pk in get_pks(self.Meta.model)]
 
     @property

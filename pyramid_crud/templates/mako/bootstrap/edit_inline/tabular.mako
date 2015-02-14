@@ -15,7 +15,7 @@
             % for form, is_extra in items:
             <tr>
                 <td style="display:none">
-				% if form.obj:
+				% if form._obj:
 					% for name, value in form.primary_keys:
 						<input type="hidden" name="${inline.name}_${loop.index}_${name}" value="${value or ''}" />
 					% endfor

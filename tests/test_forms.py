@@ -92,7 +92,7 @@ class TestNormalModelForm(object):
         obj = object()
         f = forms.ModelForm(formdata, obj)
         assert f.formdata is formdata
-        assert f.obj is obj
+        assert f._obj is obj
 
     def test_inline_id_change(self, form_factory, Model_one_pk):
         Form1 = form_factory(base=self.base_form, model=Model_one_pk)
@@ -333,7 +333,7 @@ class TestNormalModelFormWithInline(object):
             inline_ref, forms = form.inline_fieldsets[inline.name]
             assert inline_ref is inline
             child_key = 'child%d' % inline_index
-            children = getattr(form.obj, child_key)
+            children = getattr(form._obj, child_key)
             assert len(children) == len(forms) == self.children_no
             for child_index, (child, (inline_form, is_new)) in \
                     enumerate(zip(children, forms)):
@@ -363,7 +363,7 @@ class TestNormalModelFormWithInline(object):
             inline_ref, forms = form.inline_fieldsets[inline.name]
             assert inline_ref is inline
             child_key = 'child%d' % inline_index
-            children = getattr(form.obj, child_key)
+            children = getattr(form._obj, child_key)
             # either number of objs or items in formdata
             data_count = max(len(children), int(self.form_count))
             assert data_count == len(forms)
