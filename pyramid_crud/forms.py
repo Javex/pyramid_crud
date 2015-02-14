@@ -278,42 +278,16 @@ class ModelForm(_CoreModelForm):
                 # names (i.e. inline.name_index_field.name).
                 # The created values can then be sent to the individual forms
                 # below based on their index.
-                item_count = int(formdata.get('%s_count' % inline.name, 0))
-                for index in range(item_count + 1):
+                count = int(formdata.get('%s_count' % inline.name, 0))
+                for index in range(count):
                     inline_formdata[index] = MultiDict()
                     for field in inline.field_names:
                         data = formdata.get('%s_%d_%s' % (inline.name,
                                                           index, field))
                         if data:
                             inline_formdata[index][field] = data
-
-            if formdata:
-                count = formdata.get('%s_count' % inline.name)
             else:
                 count = None
-
-            # Delete items where requested
-            to_delete = set()  # Which items should be deleted?
-            if formdata and count is not None:
-                count = int(count)
-                for index in range(count):
-                    delete_key = 'delete_%s_%d' % (inline.name, index)
-                    if delete_key in formdata:
-                        # Get the primary keys from the form and delete the
-                        # item with the matching primary keys.
-                        pks = inline.pks_from_formdata(formdata, index)
-                        if pks:
-                            session = object_session(obj)
-                            target = session.query(inline.Meta.model).get(pks)
-                            if target is None:
-                                raise LookupError("Target with pks %s does "
-                                                  "not exist" % str(pks))
-                            session.delete(target)
-                            # make sure the list is reloaded
-                            session.expire(obj)
-                            count -= 1
-                        else:
-                            to_delete.add(index)
 
             # Find the matching relationship
             # We determine this *outside* of the obj block because we want to
@@ -322,11 +296,18 @@ class ModelForm(_CoreModelForm):
 
             # Add all existing items
             if obj:
+                session = object_session(obj)
                 index = -1  # Needed in case there are no items yet
                 for index, item in enumerate(getattr(obj, key)):
-                    form = inline(inline_formdata.get(index), item)
-                    form.is_extra = False
-                    inline_forms.append(form)
+                    delete_key = 'delete_%s_%d' % (inline.name, index)
+                    if formdata and delete_key in formdata:
+                        session.delete(item)
+                        # make sure the list is reloaded
+                        session.expire(obj)
+                    else:
+                        form = inline(inline_formdata.get(index), item)
+                        form.is_extra = False
+                        inline_forms.append(form)
                 max_index = index + 1
             else:
                 max_index = 0
@@ -346,7 +327,8 @@ class ModelForm(_CoreModelForm):
             # Add empty form items
             for index in range(max_index, extra + max_index):
                 # Only add an extra field if deletion of it was not requested
-                if index not in to_delete:
+                delete_key = 'delete_%s_%d' % (inline.name, index)
+                if not formdata or delete_key not in formdata:
                     form = inline(inline_formdata.get(index))
                     form.is_extra = True
                     inline_forms.append(form)
