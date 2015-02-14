@@ -349,14 +349,22 @@ class TestCRUDView(object):
         action_form = data['action_form']
         assert len(action_form.items.choices) == 1
 
-    @pytest.fixture
-    def delete_confirm(self, config):
-        config.include('pyramid_mako')
-        config.include('pyramid_crud')
-        config.commit()
+    @pytest.mark.usefixtures("route_setup", "csrf_token")
+    def test_delete_multiple(self, obj):
+        obj2 = self.Model()
+        self.session.add(obj2)
+        self.session.flush()
+        self.request.method = 'POST'
+        self.request.POST['action'] = 'delete'
+        self.request.POST['items'] = str(obj.id)
+        with patch('pyramid_crud.views.render_to_response') as mock:
+            self.view.list()
+            _, data = mock.call_args[0]
+        assert data["form"].items.choices == [(str(obj.id), '')]
+        assert data["items"] == [obj]
 
     @pytest.mark.usefixtures("route_setup", "csrf_token", "template_setup")
-    def test_delete_confirm(self, obj):
+    def test_delete(self, obj):
         self.request.method = 'POST'
         self.request.POST['action'] = 'delete'
         self.request.POST['items'] = str(obj.id)
@@ -366,7 +374,7 @@ class TestCRUDView(object):
         assert '<li>ModelStr</li>' in response.text
 
     @pytest.mark.usefixtures("route_setup", "csrf_token")
-    def test_delete(self, obj):
+    def test_delete_confirm(self, obj):
         self.request.method = 'POST'
         self.request.POST['action'] = 'delete'
         self.request.POST['confirm_delete'] = 'something'
@@ -377,7 +385,7 @@ class TestCRUDView(object):
         flash.assert_called_once_with('1 Model deleted!')
 
     @pytest.mark.usefixtures("route_setup", "csrf_token")
-    def test_delete_invalid_token(self, obj):
+    def test_delete_confirm_invalid_token(self, obj):
         self.request.method = 'POST'
         self.request.POST['action'] = 'delete'
         self.request.POST['confirm_delete'] = 'something'
@@ -389,7 +397,7 @@ class TestCRUDView(object):
                                       'item(s)', 'error')
 
     @pytest.mark.usefixtures("route_setup", "csrf_token")
-    def test_delete_multiple(self, obj):
+    def test_delete_confirm_multiple(self, obj):
         obj2 = self.Model()
         self.session.add(obj2)
         self.session.flush()
@@ -404,7 +412,7 @@ class TestCRUDView(object):
         flash.assert_called_once_with('2 Models deleted!')
 
     @pytest.mark.usefixtures("route_setup", "csrf_token")
-    def test_delete_fail(self, obj):
+    def test_delete_confirm_fail(self, obj):
         self.request.method = 'POST'
         self.request.POST['action'] = 'delete'
         self.request.POST['confirm_delete'] = 'something'

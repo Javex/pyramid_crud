@@ -520,14 +520,14 @@ class CRUDView(object):
         self.request = request
         self._action_form = None
 
-    def _get_item_choices(self):
+    def _get_item_choices(self, items=None):
         pks = get_pks(self.Form.Meta.model)
         if len(pks) != 1:
             raise ValueError("Can only handle a single primary key")
         [pk] = pks
 
         cb_choices = []
-        for item in self.get_list_query():
+        for item in (items or self.get_list_query()):
             cb_choices.append((str(getattr(item, pk)), ''))
         return cb_choices
 
@@ -579,17 +579,18 @@ class CRUDView(object):
         Delete all objects in the ``query``.
         """
         try:
+            items = query.all()
             req_validator = InputRequired('You must select at least one '
                                           'item')
+            choices = self._get_item_choices(items)
 
             class ConfirmationForm(CSRFForm):
                 action = HiddenField()
                 confirm_delete = SubmitField('Delete')
-                items = MultiHiddenField(choices=self._get_item_choices(),
+                items = MultiHiddenField(choices=choices,
                                          validators=[req_validator])
             form = ConfirmationForm(self.request.POST,
                                     csrf_context=self.request)
-            items = query.all()
             if 'confirm_delete' in self.request.POST:
                 if not form.validate():
                     # Likely CSRF or other fiddling, don't bother checking
@@ -756,7 +757,7 @@ class CRUDView(object):
                     col = getattr(self, col)
                 else:
                     raise AttributeError("No attribute of name '%s' on model "
-                                         "or view found", col)
+                                         "or view found" % col)
             # Create a copy
             if hasattr(col, 'info'):
                 col_info = dict(col.info)
