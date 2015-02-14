@@ -887,6 +887,10 @@ class CRUDView(object):
         if pks is not None:
             is_new = False
             obj = self.dbsession.query(Model).get(tuple(pks.values()))
+            if obj is None:
+                self.request.session.flash("This object does not exist.",
+                                           'error')
+                raise self.redirect(self.routes['list'])
             form = self.Form(self.request.POST, obj, csrf_context=self.request)
         else:
             is_new = True

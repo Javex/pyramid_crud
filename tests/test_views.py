@@ -552,6 +552,17 @@ class TestCRUDView(object):
         with pytest.raises(ValueError):
             edit_run_factory('invalid_action')
 
+    @pytest.mark.usefixtures("route_setup", "session")
+    def test_edit_invalid_pk(self,):
+        self.request.method = 'POST'
+        self.request.matchdict['id'] = '1'
+        self.request.POST['test_text'] = 'testval'
+        self.request.POST['save_close'] = "Foo"
+        with pytest.raises(HTTPFound):
+            self.view.edit()
+        flash = self.request.session.flash
+        flash.assert_called_once_with('This object does not exist.', 'error')
+
     def test_edit_invalid_form(self, edit_run_factory):
         del self.request.POST['csrf_token']
         params, is_new = edit_run_factory('save', expect_redirect=False)
