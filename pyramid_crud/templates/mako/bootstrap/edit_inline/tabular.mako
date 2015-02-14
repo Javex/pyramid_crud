@@ -12,7 +12,7 @@
             </tr>
         </thead>
         <tbody>
-            % for form, is_extra in items:
+            % for form in items:
             <tr>
                 <td style="display:none">
 				% if form._obj:

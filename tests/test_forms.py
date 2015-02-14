@@ -304,8 +304,8 @@ class TestNormalModelFormWithInline(object):
             inline_ref, forms = form.inline_fieldsets[inline.name]
             assert inline_ref is inline
             assert len(forms) == int(self.form_count)
-            for form_index, (inline_form, is_new) in enumerate(forms):
-                assert is_new is True
+            for form_index, inline_form in enumerate(forms):
+                assert inline_form.is_extra is True
                 for field in inline_form:
                     assert str(field.data) == self.formdata[field.name]
 
@@ -335,9 +335,9 @@ class TestNormalModelFormWithInline(object):
             child_key = 'child%d' % inline_index
             children = getattr(form._obj, child_key)
             assert len(children) == len(forms) == self.children_no
-            for child_index, (child, (inline_form, is_new)) in \
+            for child_index, (child, inline_form) in \
                     enumerate(zip(children, forms)):
-                assert is_new is False
+                assert inline_form.is_extra is False
                 if self.value_type == 'Children only':
                     text_key = ('child%d_%d_test_text'
                                 % (inline_index, child_index))
@@ -367,7 +367,7 @@ class TestNormalModelFormWithInline(object):
             # either number of objs or items in formdata
             data_count = max(len(children), int(self.form_count))
             assert data_count == len(forms)
-            for child_index, (child, (inline_form, is_new)) in \
+            for child_index, (child, inline_form) in \
                     enumerate(zip(children, forms)):
                 if self.value_type == 'Children only':
                     text_key = ('child%d_%d_test_text'
@@ -378,19 +378,19 @@ class TestNormalModelFormWithInline(object):
                     assert inline_form.test_int.name == int_key
                     if child_index < int(self.form_count):
                         if child_index <= self.values_on_children_no:
-                            assert is_new is False
+                            assert inline_form.is_extra is False
                         else:
-                            assert is_new is True
+                            assert inline_form.is_extra is True
                         assert str(inline_form.test_text.data) == \
                             self.formdata[text_key]
                         assert str(inline_form.test_int.data) == \
                             self.formdata[int_key]
                     elif child_index <= self.values_on_children_no:
-                        assert is_new is False
+                        assert inline_form.is_extra is False
                         assert inline_form.test_text.data == child.test_text
                         assert inline_form.test_int.data == child.test_int
                     else:
-                        assert is_new is False
+                        assert inline_form.is_extra is False
                         assert inline_form.test_text.data is None
                         assert inline_form.test_int.data is None
 
@@ -402,8 +402,8 @@ class TestNormalModelFormWithInline(object):
         inline, forms = form.inline_fieldsets['child']
         assert len(forms) == 1
         assert inline == ChildForm
-        form, is_new = forms[0]
-        assert is_new is True
+        form = forms[0]
+        assert form.is_extra is True
         assert form.test_text.data is None
 
     def test_process_inline_extra(self, extra, _basic_form_with_inline):
@@ -415,8 +415,8 @@ class TestNormalModelFormWithInline(object):
         assert inline is ChildForm
         assert inline.extra == extra
         assert len(forms) == extra
-        for form, is_new in forms:
-            assert is_new is True
+        for form in forms:
+            assert form.is_extra is True
             assert form.test_text.data is None
 
     def test_process_inline_extra_obj(self, extra, _basic_form_with_inline):
@@ -433,12 +433,12 @@ class TestNormalModelFormWithInline(object):
         assert inline is ChildForm
         assert inline.extra == extra
         assert len(forms) == extra + 1
-        for index, (form, is_new) in enumerate(forms):
+        for index, form in enumerate(forms):
             if index == 0:
-                assert is_new is False
+                assert form.is_extra is False
                 assert form.test_text.data == 'TestValue'
             else:
-                assert is_new is True
+                assert form.is_extra is True
                 assert form.test_text.data is None
 
     def test_process_inline_extra_formdata(self,
@@ -452,8 +452,8 @@ class TestNormalModelFormWithInline(object):
         assert inline is ChildForm
         assert inline.extra == 3
         assert len(forms) == 5
-        for form, is_new in forms:
-            assert is_new is True
+        for form in forms:
+            assert form.is_extra is True
             assert form.test_text.data is None
 
     def test_process_inline_extra_obj_formdata(
@@ -470,12 +470,12 @@ class TestNormalModelFormWithInline(object):
         assert inline is ChildForm
         assert inline.extra == 3
         assert len(forms) == 5
-        for index, (form, is_new) in enumerate(forms):
+        for index, form in enumerate(forms):
             if index == 0:
-                assert is_new is False
+                assert form.is_extra is False
                 assert form.test_text.data == 'TestValue'
             else:
-                assert is_new is True
+                assert form.is_extra is True
                 assert form.test_text.data is None
 
     def test_process_inline_delete(
@@ -527,8 +527,8 @@ class TestNormalModelFormWithInline(object):
         inline, forms = form.inline_fieldsets['child']
         assert inline is ChildForm
         assert len(forms) == 1
-        form, is_new = forms[0]
-        assert is_new is True
+        form = forms[0]
+        assert form.is_extra is True
         assert form.test_text.data is None
 
     def test_process_inline_no_relationship(
@@ -559,8 +559,8 @@ class TestNormalModelFormWithInline(object):
         inline, forms = form.inline_fieldsets['child']
         assert inline is ChildForm
         assert len(forms) == 1
-        inline_form, is_new = forms[0]
-        assert is_new is False
+        inline_form = forms[0]
+        assert inline_form.is_extra is False
         assert inline_form.test_text.data == 'EditVal'
         assert child.test_text == 'TestVal'
         assert len(parent.children) == 1
@@ -582,8 +582,8 @@ class TestNormalModelFormWithInline(object):
         inline, forms = form.inline_fieldsets['child']
         assert inline is ChildForm
         assert len(forms) == 1
-        inline_form, is_new = forms[0]
-        assert is_new is True
+        inline_form = forms[0]
+        assert inline_form.is_extra is True
         assert inline_form.test_text.data == 'NewVal'
         assert len(parent.children) == 0
         form.populate_obj(parent)
@@ -608,8 +608,8 @@ class TestNormalModelFormWithInline(object):
         inline, forms = form.inline_fieldsets['child']
         assert inline is ChildForm
         assert len(forms) == 1
-        inline_form, is_new = forms[0]
-        assert is_new is False
+        inline_form = forms[0]
+        assert inline_form.is_extra is False
         assert inline_form.test_text.data == 'NewVal'
         assert len(parent.children) == 1
 

@@ -267,12 +267,6 @@ class ModelForm(_CoreModelForm):
         ``inline, inline_forms`` where ``inline`` is the inline which the
         name refers to and ``inline_forms`` is the list of form instances
         associated with this inline.
-
-        This list consists of pairs ``form, is_extra``, where ``form`` is just
-        the form instance representing a single item and ``is_extra`` is a
-        boolean that describes whether this field is already present in the
-        database (in that case ``False``) or currently just an extra field
-        that is not yet persisted (``True``).
         """
         self.inline_fieldsets = OrderedDict()
         for inline in self.inlines:
@@ -331,7 +325,8 @@ class ModelForm(_CoreModelForm):
                 index = -1  # Needed in case there are no items yet
                 for index, item in enumerate(getattr(obj, key)):
                     form = inline(inline_formdata.get(index), item)
-                    inline_forms.append((form, False))
+                    form.is_extra = False
+                    inline_forms.append(form)
                 max_index = index + 1
             else:
                 max_index = 0
@@ -353,12 +348,13 @@ class ModelForm(_CoreModelForm):
                 # Only add an extra field if deletion of it was not requested
                 if index not in to_delete:
                     form = inline(inline_formdata.get(index))
-                    inline_forms.append((form, True))
+                    form.is_extra = True
+                    inline_forms.append(form)
 
             # For all forms, rename them and reassign their IDs as well. Only
             # by this measure can be guaranteed that each item can be addressed
             # individually.
-            for index, (form, _) in enumerate(inline_forms):
+            for index, form in enumerate(inline_forms):
                 for field in form:
                     field.name = "%s_%d_%s" % (inline.name, index, field.name)
                     field.id = field.name
@@ -382,16 +378,18 @@ class ModelForm(_CoreModelForm):
         session = object_session(obj)
         for inline, forms in self.inline_fieldsets.values():
             inline_model = inline.Meta.model
-            for index, (inline_form, _) in enumerate(forms):
+            for index, inline_form in enumerate(forms):
                 # Get the primary keys from the form. This ensures that we
                 # update existing objects while new objects get inserted.
                 pks = inline.pks_from_formdata(self.formdata, index)
                 if pks is not None:
+                    assert not inline_form.is_extra
                     inline_obj = session.query(inline.Meta.model).get(pks)
                     if inline_obj is None:
                         raise LookupError("Target with pks %s does not exist"
                                           % str(pks))
                 else:
+                    assert inline_form.is_extra
                     inline_obj = inline_model()
                     relationship_key = self._relationship_key(inline)
                     getattr(obj, relationship_key).append(inline_obj)
@@ -444,6 +442,10 @@ class BaseInLine(_CoreModelForm):
         are sure that items will always be added (note, however, that the extra
         attribute is not used to enforce a minimum number of members in the
         database). Defaults to ``0``.
+
+    is_extra
+        A boolean indicating whether this instance is an extra field or a
+        persisted database field. Set during parent's processing.
     """
     extra = 0
     relationship_name = None
