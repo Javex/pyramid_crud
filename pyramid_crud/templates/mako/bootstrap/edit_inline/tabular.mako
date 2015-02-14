@@ -24,6 +24,16 @@
                 % for field in form:
                 <td>
                     ${field()}
+                    % if field.errors:
+                        <div class="alert alert-danger">
+                        % for msg in field.errors:
+                            ${msg}
+                            % if not loop.last:
+                                <br />
+                            % endif
+                        % endfor
+                        </div>
+                    % endif
                 </td>
                 % endfor
                 <td>

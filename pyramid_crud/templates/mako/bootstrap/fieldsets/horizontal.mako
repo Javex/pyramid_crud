@@ -7,22 +7,25 @@
         % if getattr(field.widget, 'input_type', None) == 'hidden':
             ${field()}
         % else:
-            <div class="form-group">
+            <div class="form-group ${'has-error' if field.errors else ''}">
                 ${field.label(class_='control-label col-sm-2')}
                 <div class="col-sm-10">
                     ${field(class_='form-control')}
                     % if getattr(field, 'description', ''):
                         <span class="help-block">${field.description}</span>
                     % endif
-                </div>
-            % if field.errors:
-                <ul>
-                    % for msg in field.errors:
-                        <li>${msg}</li>
-                    % endfor
-                </ul>
-            % endif
-            </div>
+                    % if field.errors:
+                        <div class="alert alert-danger">
+                            % for msg in field.errors:
+                                ${msg}
+                                % if not loop.last:
+                                    <br />
+                                % endif
+                            % endfor
+                        </div>
+                    % endif
+                 </div>
+           </div>
         % endif
     % endfor
 </fieldset>

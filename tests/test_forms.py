@@ -152,6 +152,16 @@ class TestNormalModelForm(object):
             mocked.assert_called_one_with(generic_obj)
 
 
+    def test_validate(self, formdata, generic_obj):
+        form = self.base_form(formdata, generic_obj)
+        base = self.base_form.__bases__[0]
+        with patch.object(base, 'validate') as mocked:
+            form.validate_inline = MagicMock()
+            form.validate()
+            form.validate_inline.assert_called_once_with()
+            mocked.assert_called_once_with()
+
+
 @pytest.fixture(params=[0, 1, 2])
 def form_with_inlines(request, form_factory, model_factory,
                       normal_form):
@@ -432,14 +442,10 @@ class TestNormalModelFormWithInline(object):
         inline, forms = form.inline_fieldsets['child']
         assert inline is ChildForm
         assert inline.extra == extra
-        assert len(forms) == extra + 1
-        for index, form in enumerate(forms):
-            if index == 0:
-                assert form.is_extra is False
-                assert form.test_text.data == 'TestValue'
-            else:
-                assert form.is_extra is True
-                assert form.test_text.data is None
+        assert len(forms) == 1
+        for form in forms:
+            assert form.is_extra is False
+            assert form.test_text.data == 'TestValue'
 
     def test_process_inline_extra_formdata(self,
                                            _basic_form_with_inline):
@@ -627,6 +633,81 @@ class TestNormalModelFormWithInline(object):
         with pytest.raises(LookupError):
             form.populate_obj(parent)
         assert len(parent.children) == 0
+
+    def test_validate_inline(self, form_with_inlines, formdata_with_inlines):
+        self._parse_fixtures(form_with_inlines, formdata_with_inlines)
+        form = self.Form(self.formdata)
+        assert form.validate_inline()
+
+    def test_validate_inline_nodata(self, model_factory, form_factory,
+                                    inline_form, normal_form):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+            Column('test_text', String, nullable=False),
+        ]
+        child_rels = {'parent': relationship(ParentModel, backref='children')}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+        ChildForm = form_factory(model=ChildModel, base=inline_form)
+        ParentForm = form_factory({'inlines': [ChildForm]}, model=ParentModel,
+                                  base=normal_form)
+
+        child = ChildForm.Meta.model()
+
+        form = ParentForm(MultiDict({'child_count': '1'}))
+        assert not form.validate_inline()
+        assert len(form.errors) == 1
+        assert 'child_0_test_text' in form.errors
+        inline_err = form.inline_fieldsets["child"][1][0].errors
+        assert len(inline_err) == 1
+        assert 'test_text' in inline_err
+
+    def test_validate_inline_missing_data_on_persisted(
+            self, model_factory, form_factory, inline_form, normal_form,
+            DBSession):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+            Column('test_text', String, nullable=False),
+        ]
+        child_rels = {'parent': relationship(ParentModel, backref='children')}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+        ChildForm = form_factory(model=ChildModel, base=inline_form)
+        ParentForm = form_factory({'inlines': [ChildForm]}, model=ParentModel,
+                                  base=normal_form)
+
+        parent = ParentModel()
+        child = ChildForm.Meta.model(test_text='foo')
+        parent.children.append(child)
+        DBSession.add(child)
+        DBSession.flush()
+        assert child.id is not None
+
+        form = ParentForm(MultiDict({'child_count': '1',
+                                     'child_0_test_text': '',
+                                     'child_0_id': str(child.id)}),
+                          obj=parent)
+        assert not form.validate_inline()
+        assert len(form.errors) == 1
+        assert 'child_0_test_text' in form.errors
+        inline_err = form.inline_fieldsets["child"][1][0].errors
+        assert len(inline_err) == 1
+        assert 'test_text' in inline_err
+
+    def test_validate_inline_one_valid(self, _basic_form_with_inline):
+        ParentForm, _ = _basic_form_with_inline
+        parent = ParentForm()
+        child = MagicMock()
+        form1, form2 = MagicMock(), MagicMock()
+        form1.validate.return_value = False
+        form1.errors = {}
+        parent.inlines = [child]
+        parent.inline_fieldsets = {'child': (child, [form1, form2])}
+        assert not parent.validate_inline()
+        assert form1.validate.assert_called_once()
+        assert form2.validate.assert_called_once()
 
 
 # tests for all forms that inherit from _CoreModelForm (thus any form)

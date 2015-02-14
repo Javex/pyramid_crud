@@ -312,13 +312,13 @@ class ModelForm(_CoreModelForm):
             else:
                 max_index = 0
 
-            # Make the correct number of extra empty fields
-            # If there currently is a count (only on POST request), we take the
-            # value from the form, otherwise we use the configured default.
-            # In case of POST, we have to subtract the existing database items
-            # from above as those fields were already added.
+            # Only show extra fields when no object is attached or the current
+            # form has them added.
             if count is None:
-                extra = inline.extra
+                if obj:
+                    extra = 0
+                else:
+                    extra = inline.extra
             else:
                 extra = count - max_index
             if formdata and 'add_%s' % inline.name in formdata:
@@ -381,6 +381,33 @@ class ModelForm(_CoreModelForm):
                 # and added to its associated object, we can now just populate
                 # it as we would do with a normal form and object.
                 inline_form.populate_obj(inline_obj)
+
+    def validate(self):
+        result = super(ModelForm, self).validate()
+        result = result and self.validate_inline()
+        return result
+
+    def validate_inline(self):
+        """
+        Validate all inline forms. Implicitly called by :meth:`validate`.
+
+        This will also fill the ``form.errors`` dict with additional error
+        messages based on invalid inline fields using the same naming pattern
+        used for naming inline fields for display and form submission, i.e.
+        ``inlinename_index_fieldname``.
+
+        Thus, if errors exist on an inline field, they can be fetched from the
+        global errors dict the same way regular errors are present in it.
+        """
+        valid = True
+        for inline, forms in self.inline_fieldsets.values():
+            for index, inline_form in enumerate(forms):
+                if not inline_form.validate():
+                    valid = False
+                    for field, entry in inline_form.errors.items():
+                        field_name = '%s_%d_%s' % (inline.name, index, field)
+                        self.errors[field_name] = entry
+        return valid
 
 
 @six.add_metaclass(_CoreModelMeta)
