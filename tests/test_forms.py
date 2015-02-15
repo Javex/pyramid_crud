@@ -886,15 +886,6 @@ class TestAnyModelForm(object):
         assert Form(obj=Model()).primary_keys == [('id', None)]
 
 
-def test_get_session_missing(model_factory, form_factory, any_form):
-    cols = [
-        Column('test_unique', String, unique=True)
-    ]
-    model = model_factory(cols)
-    with pytest.raises(Exception):
-        form_factory(base=any_form, model=model)
-
-
 def test_get_session(model_factory, form_factory, any_form,
                      DBSession):
     cols = [
