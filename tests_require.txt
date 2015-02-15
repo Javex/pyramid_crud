@@ -6,3 +6,4 @@ transaction
 webtest
 beautifulsoup4
 mock
+coverage
