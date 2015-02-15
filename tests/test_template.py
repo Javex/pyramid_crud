@@ -218,6 +218,7 @@ def test_edit_field_errors(render_edit, view, edit_template):
     view.request.method = 'POST'
     view.request.POST["save"] = "Foo"
     out = render_edit(view=view, **view.edit())
+    out = out.find_all("fieldset")[0]
     err_msg = str(out.find("div", class_='alert-danger'))
     assert "This field is required." in err_msg
 
@@ -278,6 +279,35 @@ def test_edit_inline_tabular(render_edit, view, model_factory, form_factory,
         assert child_id.attrs['value'] == '2'
     else:
         assert not re.search(r'child_\d+_id', str(out))
+
+
+def test_edit_inline_errors(render_edit, view, model_factory, form_factory,
+                            edit_template):
+    view.request.method = 'POST'
+    view.request.POST['save'] = 'Save'
+    view.request.POST['test_text'] = 'Foo'
+    view.request.POST['child_count'] = '1'
+    view.Form.fieldsets[0]["template"] = edit_template
+    cols = [Column('parent_id', ForeignKey('model.id')),
+            Column('child_text', String, nullable=False)]
+    rels = {'parent': relationship(view.Form.Meta.model, backref="children")}
+    ChildModel = model_factory(cols, 'Child', relationships=rels)
+    ChildForm = form_factory(name='ChildForm', base=forms.TabularInLine,
+                             model=ChildModel)
+    ChildForm.extra = 1
+    ChildForm.relationship_name = 'children'
+    view.Form.inlines.append(ChildForm)
+
+    out = render_edit(view=view, **view.edit())
+    # No error for parent form
+    fieldset = out.find_all("fieldset")[0]
+    err_msg = str(fieldset.find("div", class_='alert-danger'))
+    assert "This field is required." not in err_msg
+
+    # Inline error msg
+    fieldset = out.find_all("fieldset")[1]
+    err_msg = str(fieldset.find("div", class_='alert-danger'))
+    assert "This field is required." in err_msg
 
 
 def test_list_display_links(render_list, view, edit_template):
