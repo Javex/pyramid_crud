@@ -55,25 +55,8 @@ def view_configurator_class(request):
     return request.param
 
 
-@pytest.fixture(scope="session")
-def compiled_templates():
-    template_dir = abspath_from_asset_spec('pyramid_crud:templates/mako')
-    module_dir = abspath_from_asset_spec('pyramid_crud:_mako_template_cache')
-    l = TemplateLookup(directories=[template_dir],
-                       module_directory=module_dir)
-    templates = set()
-    for dirpath, _, filenames in os.walk(template_dir):
-        for filename in filenames:
-            if filename.endswith(".mako"):
-                abspath = os.path.join(dirpath, filename)
-                relpath = os.path.relpath(abspath, template_dir)
-                templates.add(relpath)
-    for template in templates:
-        l.get_template(template)
-
-
 @pytest.fixture(params=['bootstrap'])
-def template_setup(config, compiled_templates, request):
+def template_setup(config, request):
     module_dir = abspath_from_asset_spec('pyramid_crud:_mako_template_cache')
     config.add_settings({'mako.module_directory': module_dir})
     config.include("pyramid_mako")
