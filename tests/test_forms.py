@@ -151,13 +151,43 @@ class TestNormalModelForm(object):
             form.populate_obj_inline.assert_called_once_with(generic_obj)
             mocked.assert_called_one_with(generic_obj)
 
-
     def test_validate(self, formdata, generic_obj):
         form = self.base_form(formdata, generic_obj)
         base = self.base_form.__bases__[0]
         with patch.object(base, 'validate') as mocked:
             form.validate_inline = MagicMock()
-            form.validate()
+            assert form.validate()
+            form.validate_inline.assert_called_once_with()
+            mocked.assert_called_once_with()
+
+    def test_validate_with_error(self, formdata, generic_obj):
+        form = self.base_form(formdata, generic_obj)
+        base = self.base_form.__bases__[0]
+        with patch.object(base, 'validate') as mocked:
+            mocked.return_value = False
+            form.validate_inline = MagicMock()
+            assert not form.validate()
+            form.validate_inline.assert_called_once_with()
+            mocked.assert_called_once_with()
+
+    def test_validate_with_inline_error(self, formdata, generic_obj):
+        form = self.base_form(formdata, generic_obj)
+        base = self.base_form.__bases__[0]
+        with patch.object(base, 'validate') as mocked:
+            form.validate_inline = MagicMock()
+            form.validate_inline.return_value = False
+            assert not form.validate()
+            form.validate_inline.assert_called_once_with()
+            mocked.assert_called_once_with()
+
+    def test_validate_with_both_error(self, formdata, generic_obj):
+        form = self.base_form(formdata, generic_obj)
+        base = self.base_form.__bases__[0]
+        with patch.object(base, 'validate') as mocked:
+            mocked.return_value = False
+            form.validate_inline = MagicMock()
+            form.validate_inline.return_value = False
+            assert not form.validate()
             form.validate_inline.assert_called_once_with()
             mocked.assert_called_once_with()
 

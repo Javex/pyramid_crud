@@ -384,8 +384,8 @@ class ModelForm(_CoreModelForm):
 
     def validate(self):
         result = super(ModelForm, self).validate()
-        result = result and self.validate_inline()
-        return result
+        inline_result = self.validate_inline()
+        return result and inline_result
 
     def validate_inline(self):
         """
