@@ -19,8 +19,8 @@ requires = [
     'Mako',  # templating
     'pyramid_mako',  # templating
     'SQLAlchemy>=0.8',  # database
-    'WTForms',  # forms
     'wtforms_alchemy',  # forms
+    'WTForms',  # forms
     'six',
 ]
 
