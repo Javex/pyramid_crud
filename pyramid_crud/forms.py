@@ -38,7 +38,10 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
                                 if hasattr(mro_cls, attr)):
                     doc = getattr(getattr(mro_cls, attr), '__doc__')
                     if doc:
-                        attribute.__doc__ = doc
+                        try:
+                            attribute.__doc__ = doc
+                        except AttributeError:
+                            continue
                         break
         return super(_CoreModelMeta, meta).__new__(meta, name, bases, attrs)
 
