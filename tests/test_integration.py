@@ -166,6 +166,10 @@ class TestFunctional(object):
         form = response.form
         form['choice_0_choice_text'] = 'Choice1'
         form['choice_0_votes'] = '5'
+        response = response.form.submit('add_choice')
+        form = response.form
+        form['choice_1_choice_text'] = 'Choice2'
+        form['choice_1_votes'] = '6'
         response = form.submit('save')
         assert response.status_int == 302
         response = response.follow()
@@ -175,10 +179,14 @@ class TestFunctional(object):
         form = response.form
         assert form['choice_0_id'].value == '1'
         assert form['choice_0_choice_text'].value == 'Choice1'
-        assert 'choice_1_id' not in form.fields
-        assert 'choice_1_choice_text' not in form.fields
+        assert form['choice_1_id'].value == '2'
+        assert form['choice_1_choice_text'].value == 'Choice2'
         assert 'choice_2_id' not in form.fields
         assert 'choice_2_choice_text' not in form.fields
+        response = form.submit('delete_choice_0')
+        assert response.status_int == 200
+        form = response.form
+        assert "delete_choice_1" not in form.fields
         response = form.submit('delete_choice_0')
         assert response.status_int == 200
 

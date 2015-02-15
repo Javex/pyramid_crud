@@ -259,6 +259,7 @@ def test_edit_inline_tabular(render_edit, view, model_factory, form_factory,
     if with_obj:
         parent = view.Form.Meta.model(test_text='Foo')
         parent.children.append(ChildModel())
+        parent.children.append(ChildModel())
         view.dbsession.add(parent)
         view.dbsession.flush()
         view.request.matchdict["id"] = parent.id
@@ -273,6 +274,8 @@ def test_edit_inline_tabular(render_edit, view, model_factory, form_factory,
     if with_obj:
         child_id = out.find('input', attrs={'name': 'child_0_id'})
         assert child_id.attrs['value'] == '1'
+        child_id = out.find('input', attrs={'name': 'child_1_id'})
+        assert child_id.attrs['value'] == '2'
     else:
         assert not re.search(r'child_\d+_id', str(out))
 

@@ -17,7 +17,7 @@
                 <td style="display:none">
 				% if form._obj:
 					% for name, value in form.primary_keys:
-						<input type="hidden" name="${inline.name}_${loop.index}_${name}" value="${value or ''}" />
+						<input type="hidden" name="${inline.name}_${loop.parent.index}_${name}" value="${value or ''}" />
 					% endfor
 				% endif
                 </td>
