@@ -225,8 +225,8 @@ def form_factory(DBSession):
              normally be specified. If it is given, it is used as the "model"
              attribute of the "Meta" class.
     """
-
-    def get_dbsession():
+    @classmethod
+    def get_dbsession(cls):
         return DBSession
 
     def make_form(fields=None, base=None, name='SubForm',

@@ -48,7 +48,7 @@ def get_obj_test_matrix():
 
 def test_doc_copy():
     # Test regular behavior
-    class A():
+    class A(object):
         "Test Parent"
         @classmethod
         def _add_relationship_fields(cls):
