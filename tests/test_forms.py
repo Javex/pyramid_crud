@@ -1,4 +1,4 @@
-from pyramid_crud import forms
+from pyramid_crud import forms, fields
 from webob.multidict import MultiDict
 from wtforms.fields import StringField, IntegerField
 import wtforms
@@ -945,8 +945,8 @@ class TestCSRFForm(object):
 
 class TestMultiField(object):
 
-    @pytest.fixture(autouse=True, params=[forms.MultiCheckboxField,
-                                          forms.MultiHiddenField])
+    @pytest.fixture(autouse=True, params=[fields.MultiCheckboxField,
+                                          fields.MultiHiddenField])
     def _prepare(self, request):
         class Form(wtforms.Form):
             items = request.param(choices=[('1', '1'), ('2', '2')])
@@ -987,7 +987,7 @@ class TestMultiCheckboxField(object):
     @pytest.fixture(autouse=True)
     def _prepare(self):
         class Form(wtforms.Form):
-            items = forms.MultiCheckboxField(choices=[('1', ''), ('2', '')])
+            items = fields.MultiCheckboxField(choices=[('1', ''), ('2', '')])
         self.Form = Form
 
     def test_output(self):
@@ -1003,7 +1003,7 @@ class TestMultiHiddenField(object):
     @pytest.fixture(autouse=True)
     def _prepare(self):
         class Form(wtforms.Form):
-            items = forms.MultiHiddenField(choices=[('1', ''), ('2', '')])
+            items = fields.MultiHiddenField(choices=[('1', ''), ('2', '')])
         self.Form = Form
 
     def test_output(self):
@@ -1016,7 +1016,7 @@ class TestMultiHiddenField(object):
 
 def test_select_field():
     class Form(wtforms.Form):
-        select = forms.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
+        select = fields.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
     formdata = MultiDict()
     formdata['select'] = '1'
     form = Form(formdata)
@@ -1025,7 +1025,7 @@ def test_select_field():
 
 def test_select_field_invalid_choice():
     class Form(wtforms.Form):
-        select = forms.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
+        select = fields.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
     formdata = MultiDict()
     formdata['select'] = '2'
     form = Form()
@@ -1036,7 +1036,7 @@ def test_select_field_invalid_choice():
 
 def test_select_field_empty_choice():
     class Form(wtforms.Form):
-        select = forms.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
+        select = fields.SelectField(choices=[('', 'Empty'), ('1', 'Test')])
     formdata = MultiDict()
     formdata['select'] = ''
     form = Form(formdata)

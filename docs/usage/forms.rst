@@ -74,11 +74,18 @@ against CSRF attacks while still maintaining the complete functionality of the
     :members:
 
 
-API
----
+.. _Unique Validator: https://wtforms-alchemy.readthedocs.org/en/latest/validators.html#unique-validator
+
+
+Fields
+------
+
+The library defined some special fields. Normally, there is no need to be
+concerned with them as they are used internally. However, they might provide
+useful features to a developer.
+
+.. automodule:: pyramid_crud.fields
 
 .. autoclass:: MultiCheckboxField
 .. autoclass:: MultiHiddenField
 .. autoclass:: SelectField
-
-.. _Unique Validator: https://wtforms-alchemy.readthedocs.org/en/latest/validators.html#unique-validator

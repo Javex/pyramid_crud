@@ -6,7 +6,8 @@ import six
 import logging
 from .util import get_pks
 from traceback import format_exc
-from .forms import CSRFForm, MultiCheckboxField, SelectField, MultiHiddenField
+from .forms import CSRFForm
+from .fields import MultiCheckboxField, SelectField, MultiHiddenField
 from wtforms.fields import SubmitField, HiddenField
 from wtforms.validators import InputRequired
 import sqlalchemy
