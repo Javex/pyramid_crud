@@ -42,14 +42,28 @@ grid
 
 .. _inline_forms:
 
-Inline Forms
-------------
+Inline Forms / One-To-Many
+--------------------------
 
 .. autoclass:: BaseInLine
     :members:
     :inherited-members:
 
 .. autoclass:: TabularInLine
+
+Many-To-One & One-To-One
+------------------------
+
+The opposite of the One-To-Many pattern is the Many-To-One. One-To-One looks the same from the "One" side, just that the "parent" does not have many "children" but one "child".
+
+Both relationships are possible without any further configuration. They are
+automatically detected and work right away. Currently, this feature only has limited
+use as you cannot directly create a parent form here. Instead the parent object has
+to exist. Then you can go back and select it in the child's edit form.
+
+.. note::
+
+    When using a model with a child as an inline, this automatic detection will not display the parent item in the inline form.
 
 Extra Forms
 -----------

@@ -3,12 +3,14 @@ from webob.multidict import MultiDict
 from wtforms.fields import StringField, IntegerField
 import wtforms
 from sqlalchemy import Column, String, Integer, ForeignKey, inspect
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm.interfaces import MANYTOONE
 try:
     from unittest.mock import MagicMock, patch
 except ImportError:
     from mock import MagicMock, patch
 from itertools import product
+from wtforms.ext.sqlalchemy.fields import QuerySelectField
 import pytest
 import six
 
@@ -46,8 +48,11 @@ def get_obj_test_matrix():
 
 def test_doc_copy():
     # Test regular behavior
-    class A(object):
+    class A():
         "Test Parent"
+        @classmethod
+        def _add_relationship_fields(cls):
+            pass
 
     @six.add_metaclass(forms._CoreModelMeta)
     class B(A):
@@ -60,6 +65,9 @@ def test_doc_copy_no_override():
     # Test what happens if the child already has a docstring
     class A(object):
         "Test Parent"
+        @classmethod
+        def _add_relationship_fields(cls):
+            pass
 
     @six.add_metaclass(forms._CoreModelMeta)
     class B(A):
@@ -71,7 +79,9 @@ def test_doc_copy_no_override():
 def test_doc_copy_none():
     # Test what happens if noone has a docstring
     class A(object):
-        pass
+        @classmethod
+        def _add_relationship_fields(cls):
+            pass
 
     @six.add_metaclass(forms._CoreModelMeta)
     class B(A):
@@ -190,6 +200,197 @@ class TestNormalModelForm(object):
             assert not form.validate()
             form.validate_inline.assert_called_once_with()
             mocked.assert_called_once_with()
+
+
+class TestManyToOneAndOneToOne(object):
+
+    @pytest.fixture(params=[lambda x: x, backref])
+    def _backref(self, request):
+        return request.param
+
+    @pytest.fixture(params=[True, False])
+    def one_to_one(self, request):
+        return request.param
+
+    def test_base(self, form_factory, model_factory, normal_form, one_to_one):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+            Column('test_text', String),
+        ]
+        if one_to_one:
+            bref = backref('child', uselist=False)
+        else:
+            bref = 'children'
+        child_rels = {'parent': relationship(ParentModel, backref=bref)}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+        ChildForm = form_factory(model=ChildModel, base=normal_form)
+
+        form = ChildForm()
+        assert hasattr(form, 'parent')
+        assert list(form.parent.iter_choices()) == []
+
+    def test_base_with_choices(
+            self, form_factory, model_factory, normal_form, DBSession,
+            one_to_one):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        if one_to_one:
+            bref = backref('child', uselist=False)
+        else:
+            bref = 'children'
+        child_rels = {'parent': relationship(ParentModel, backref=bref)}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+        ChildForm = form_factory(model=ChildModel, base=normal_form)
+
+        objs = [ParentModel(), ParentModel()]
+        DBSession.add_all(objs)
+
+        form = ChildForm()
+        assert hasattr(form, 'parent')
+        field_items = list(form.parent._get_object_list())
+        field_items = [i[1] for i in field_items]
+        assert field_items == objs
+
+    def test_one_to_many_with_many_to_one(
+            self, form_factory, model_factory, normal_form, DBSession,
+            inline_form, _backref):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        child_rels = {
+            'parent': relationship(ParentModel, backref=_backref('children'))
+        }
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+        ChildForm = form_factory(model=ChildModel, base=inline_form)
+        ParentForm = form_factory({'inlines': [ChildForm]}, model=ParentModel,
+                                  base=normal_form)
+        parent = ParentModel()
+        parent.children.append(ChildModel())
+
+        form = ParentForm(obj=parent)
+        assert len(form.inline_fieldsets) == 1
+        for child_form in form.inline_fieldsets['child'][1]:
+            assert not hasattr(child_form, 'parent')
+
+    def test__add_relationship_fields(self, form_factory, model_factory,
+                                     any_form, DBSession):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        child_rels = {'parent': relationship(ParentModel, backref='children')}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+
+        attrs = {
+            '_find_relationships_for_query': MagicMock(
+                return_value=[ChildModel.parent.property])
+        }
+
+        ChildForm = form_factory(attrs, base=any_form, model=ChildModel)
+        assert ChildForm.parent.field_class == QuerySelectField
+        form = ChildForm()
+        assert form.parent.data is None
+
+    def test__add_relationship_fields_obj(self, form_factory, model_factory,
+                                          any_form, DBSession):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        child_rels = {'parent': relationship(ParentModel, backref='children')}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+
+        attrs = {
+            '_find_relationships_for_query': MagicMock(
+                return_value=[ChildModel.parent.property])
+        }
+
+        ChildForm = form_factory(attrs, base=any_form, model=ChildModel)
+        assert ChildForm.parent.field_class == QuerySelectField
+
+        obj = ChildModel()
+        form = ChildForm(obj=obj)
+        assert form.parent.data is None
+
+        obj.parent = ParentModel()
+        form = ChildForm(obj=obj)
+        assert form.parent.data == obj.parent
+        assert form.parent().startswith('<select')
+
+    def test__add_relationship_fields_missing_session(
+            self, form_factory, model_factory, any_form, DBSession):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        child_rels = {'parent': relationship(ParentModel, backref='children')}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+
+        with pytest.raises(ValueError):
+            class ChildForm(any_form):
+
+                class Meta:
+                    model = ChildModel
+
+                @classmethod
+                def _find_relationships_for_query(cls):
+                    return [ChildModel.parent.property]
+
+    def test__add_relationship_fields_exclude_one_to_may(
+            self, form_factory, model_factory, any_form, DBSession):
+        parent_rels = {
+            'children': relationship(lambda: ChildModel, backref='parent')
+        }
+        ParentModel = model_factory(name='Parent', relationships=parent_rels)
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        ChildModel = model_factory(child_cols, 'Child')
+
+        attrs = {
+            '_find_relationships_for_query': MagicMock(
+                return_value=[inspect(ParentModel.children).property])
+        }
+        ParentForm = form_factory(attrs, base=any_form, model=ParentModel)
+        assert not hasattr(ParentForm, 'children')
+
+    def test__find_relationships_for_query_normal(
+            self, form_factory, model_factory, normal_form):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        child_rels = {'parent': relationship(ParentModel, backref='children')}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+
+        ChildForm = form_factory(base=normal_form, model=ChildModel)
+        rels = ChildForm._find_relationships_for_query()
+        assert rels == [ChildModel.parent.property]
+
+    def test__find_relationships_for_query_inline(
+            self, form_factory, model_factory, normal_form, inline_form):
+        ParentModel = model_factory(name='Parent')
+        child_cols = [
+            Column('parent_id', ForeignKey('parent.id')),
+        ]
+        child_rels = {'parent': relationship(ParentModel, backref='children')}
+        ChildModel = model_factory(child_cols, 'Child',
+                                   relationships=child_rels)
+
+        ChildForm = form_factory(base=inline_form, model=ChildModel)
+        rels = ChildForm._find_relationships_for_query()
+        assert rels == []
 
 
 @pytest.fixture(params=[0, 1, 2])
@@ -682,8 +883,6 @@ class TestNormalModelFormWithInline(object):
         ChildForm = form_factory(model=ChildModel, base=inline_form)
         ParentForm = form_factory({'inlines': [ChildForm]}, model=ParentModel,
                                   base=normal_form)
-
-        child = ChildForm.Meta.model()
 
         form = ParentForm(MultiDict({'child_count': '1'}))
         assert not form.validate_inline()

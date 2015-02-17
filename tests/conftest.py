@@ -211,7 +211,7 @@ def model_factory(request, Base, metadata, engine):
 
 
 @pytest.fixture
-def form_factory():
+def form_factory(DBSession):
     """A factory function to create a form. The following arguments are
     accepted:
 
@@ -225,6 +225,10 @@ def form_factory():
              normally be specified. If it is given, it is used as the "model"
              attribute of the "Meta" class.
     """
+
+    def get_dbsession():
+        return DBSession
+
     def make_form(fields=None, base=None, name='SubForm',
                   model=None, bases=None):
         if fields is None:
@@ -236,6 +240,7 @@ def form_factory():
         if bases is None:
             bases = (base,)
 
+        fields['get_dbsession'] = get_dbsession
         if model is not None:
             fields['Meta'] = type('Meta', (object,), {'model': model})
         return type(name, bases, fields)

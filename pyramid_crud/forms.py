@@ -1,9 +1,10 @@
 import wtforms_alchemy
 import six
 from wtforms.ext.csrf.form import SecureForm
-import wtforms
+from wtforms.ext.sqlalchemy.fields import QuerySelectField
 from .util import get_pks, meta_property
 from sqlalchemy.orm.session import object_session
+from sqlalchemy.orm.interfaces import MANYTOONE
 from sqlalchemy.inspection import inspect
 from webob.multidict import MultiDict
 import logging
@@ -43,7 +44,9 @@ class _CoreModelMeta(wtforms_alchemy.ModelFormMeta):
                         except AttributeError:
                             continue
                         break
-        return super(_CoreModelMeta, meta).__new__(meta, name, bases, attrs)
+        cls = super(_CoreModelMeta, meta).__new__(meta, name, bases, attrs)
+        cls._add_relationship_fields()
+        return cls
 
     @meta_property
     def title(cls):
@@ -118,6 +121,28 @@ class _CoreModelForm(wtforms_alchemy.ModelForm):
             result.append(fieldset)
         return result
 
+    @classmethod
+    def _add_relationship_fields(cls):
+        for rel in cls._find_relationships_for_query():
+            if rel.direction != MANYTOONE:
+                continue
+            if not hasattr(cls, 'get_dbsession'):
+                raise ValueError('You need to define a get_dbsession classmethod')
+
+            def query():
+                session = cls.get_dbsession()
+                return session.query(rel.mapper.class_)
+            field = QuerySelectField(query_factory=query)
+            setattr(cls, rel.key, field)
+
+    @classmethod
+    def _find_relationships_for_query(cls):
+        if not cls.Meta.model:
+            return []
+        rels = inspect(cls.Meta.model).relationships
+        rels = [rel for rel in rels if rel.direction == MANYTOONE]
+        return rels
+
 
 class CSRFForm(SecureForm):
     """
@@ -155,7 +180,10 @@ class CSRFForm(SecureForm):
 class ModelMeta(_CoreModelMeta):
     def __new__(meta, name, bases, attrs):
         attrs.setdefault("inlines", [])
-        return super(ModelMeta, meta).__new__(meta, name, bases, attrs)
+        cls = super(ModelMeta, meta).__new__(meta, name, bases, attrs)
+        for inline in cls.inlines:
+            inline._parent = cls
+        return cls
 
 
 @six.add_metaclass(ModelMeta)
@@ -227,7 +255,7 @@ class ModelForm(_CoreModelForm):
         `Unique Validator`_. This is a limitation we soon hope to overcome.
     """
     @classmethod
-    def _relationship_key(self, other_form):
+    def _relationship_key(cls, other_form):
         """
         Get the name of the attribute that is the relationship between this
         forms model and the model defined on another form.
@@ -245,17 +273,17 @@ class ModelForm(_CoreModelForm):
 
         other_model = other_form.Meta.model
         candidates = []
-        for relationship in inspect(self.Meta.model).relationships:
+        for relationship in inspect(cls.Meta.model).relationships:
             if relationship.mapper.class_ == other_model:
                 candidates.append(relationship.key)
         if len(candidates) == 0:
             raise TypeError("Could not find relationship between the models "
-                            "%s and %s" % (self.Meta.model, other_model))
+                            "%s and %s" % (cls.Meta.model, other_model))
         elif len(candidates) > 1:
             raise TypeError("relationship between the models %s and %s is "
                             "ambigous. Please specify the "
                             "'relationship_name' attribute on %s"
-                            % (self.Meta.model, other_model, other_form))
+                            % (cls.Meta.model, other_model, other_form))
         return candidates[0]
 
     def process(self, formdata=None, obj=None, **kwargs):
@@ -491,6 +519,16 @@ class BaseInLine(_CoreModelForm):
             pk_val = int(pk_val)
             pks.append(pk_val)
         return tuple(pks)
+
+    @classmethod
+    def _find_relationships_for_query(cls):
+        # Prevent parent from being displayed inline
+        rels = _CoreModelForm._find_relationships_for_query()
+        if not rels:
+            return []
+        inline_key = cls._parent._relationship_key(cls)
+        rels = [rel for rel in rels if rel.back_populates != inline_key]
+        return rels
 
 
 class TabularInLine(BaseInLine):
